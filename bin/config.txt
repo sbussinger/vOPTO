@@ -1,112 +1,28 @@
-REM Configuration
-REM =============
-rem vDos supports some options, you set them in this file.
-rem Most of the default settings should only be changed if needed.
-rem Don't try to include DOS config.sys settings like KEYB=, that won't work!
+rem low = on
+rem umb = on
+rem ems = on
+rem mouse = on
+wp = 6
+rem scale = 1
+rem color = on
+
+rem			0 - Black	1 - Blue	2 - Green 	3 - Aqua 	4 - Red 	5 - Purple	6 - Yellow 	7 - White 		8 - Gray	9 - Lt Blue		10 - Lt Green	11 - Lt Aqua	12 - Lt Red		13- Lt Purple	14 - Lt Yellow	15 - Bright White
+colors =	(16,16,16)	#1040B1		(0,152,0)	(0,144,176)	(176,32,64)	(144,0,176)	(208,96,0)	(192,192,192)	(96,96,96)	(40,136,255)	(120,184,0)		(144,244,224)	(216,72,48)		(224,244,255)	(244,224,128)	(240,240,240)
 
 
-REM Keyboard (docu)
-REM ===============
-rem [Alt][Enter] switches to and from (semi) full screen mode.
-rem [Win]+F11 decreases, [Win]+F12 increases the point size of the font and so the window size.
-rem The point size of the built-in font is always even, assuring an optimal alignment of line drawing characters.
-rem [Win][Ctrl]+C copies the DOS screen to a file that is opened by the Windows program assigned to text files.
-rem [Win][Ctrl]+V pastes the Windows clipboard to the DOS keyboard.
+
+rem lins = 43
+rem cols = 90
+
+font = consolas
+frame = on
+WINDOW = 65, 20:20
 
 
-REM Select and copy text (docu)
-REM ===========================
-rem Start selecting a rectangle block of text with [Win][Ctrl]+mouse click.
-rem Drag the mouse and release the mouse button, the selected text is in the Window clipboard.
-
-
-REM Memory
-REM ======
-rem The first 64 KB (low) memory block is excluded.
-rem If you need more than 575KB of conventional memory. Caution: not all DOS programs can handle this:
-rem LOW = ON
-
-rem Upper memory blocks are not available.
-rem You can get an extra 127KB with: 
-rem UMB = ON
-
-rem Extended memory is 16MB, that should be sufficient for any DOS program.
-
-
-REM Mouse
-REM =====
-rem In text mode the mouse is disabled.
-rem Many DOS programs just manage the mouse badly.
-rem MOUSE = ON
-
-
-REM Window/font
-REM ===========
-rem Text is displayed using a built-in TTF font.
-rem If you want to use another TTF font, copy that file (consola.ttf...) to the vDos directory and:
-rem FONT = CONSOLA
-
-rem The standard vDos window is lean and mean, no borders or title bar.
-rem Hover over the top line, a minimize button will appear in the upper right corner.
-rem Left click and drag the window to move it.
-rem No close button, you have to EXIT to close the window.
-rem If you’re willing to sacrifice some screen space to get borders and title bar:
-rem FRAME = ON
-
-rem The initial window will cover max 75% of the screen.
-rem To change this, use WINDOW = <max percentage>.
-rem This would give you a full screen window:
-rem WINDOW = 100
-
-rem The window is by default centered on the desktop.
-rem To set it at another position, use WINDOW = <max percentage>, left x-pos, top y-pos.
-rem Note the window is ensured to be completely visible, if not, the x- and y-pos are dropped.
-rem WINDOW = 80,100:0
-
-rem The number of lines/columns in text mode are the familiar 25/80.
-rem You can override this by LINS = <24..60> and COLS = <80..160>. 
-rem And use any combination of these.
-rem See for yourself if this is useful or even supported by your application.
-
-rem You can postpone vDos from displaying anything.
-rem Default = 0.5 seconds, in most cases the initial black DOS screen won't show up.
-rem This value is in tenths of a seconds, to hide the vDos window for 1 second:
-rem HIDE = 10
-
-rem To use a different color scheme in text mode, supply 16 color values in RGB(r,g,b) or hexadecimal as in HTML: #RRBBGG.
-rem This gives you a bit dimmed color scheme (first line is docu):
-rem				0 - Black	1 - Blue	2 - Green 	3 - Aqua 	4 - Red 	5 - Purple	6 - Yellow 	7 - White 		8 - Gray	9 - Lt Blue		10 - Lt Green	11 - Lt Aqua	12 - Lt Red		13- Lt Purple	14 - Lt Yellow	15 - Bright White
-rem COLORS =	(16,16,16)	#1040B1		(0,152,0)	(0,144,176)	(176,32,64)	(144,0,176)	(208,96,0)	(192,192,192)	(96,96,96)	(40,136,255)	(120,184,0)		(144,244,224)	(216,72,48)		(224,244,255)	(244,224,128)	(240,240,240)
-
-rem To scale the window in DOS graphics mode:
-rem SCALE = <1..9> (that’s 100..900%).
-rem It won't be that nice, 1 point is simply enlarged to 2x2 points:
-rem SCALE = 2
-
-
-REM Printing
-REM ========
-rem LPT<1..9> and COM<1..9> are available for printing, creating RTF (Word), PDF documents or mailing.
-rem The shareware program DOSPrinter handles printer output. Note it only supports Epson ESC/P (the most widely used DOS printer).
-rem If nothing is set, it will pop up a printer selection dialog when your application prints to a port.
-rem Some examples, have a look at the DOSPrinter.pdf for more options:
+LPT1 = "c:\windows\system32\notepad.exe" #lpt1.txt
+COM1 = c:\windows\system32\notepad.exe #com1.txt
 rem LPT1 = /SEL2 /CPIA /LEFT0.50 /TOP0.50
-rem COM1 = /SEL /SEL2 /RTF /CPIA /LEFT0.75 /TOP0.75 /65
-rem If you have a (DOS) printer that supports your DOS application output directly:
-rem LPT2 = /SEL'HPLaserJet2200' /RAW
+rem LPT2 = d:\PrFile\spool.txt
+rem LPT3 = dummy
+rem COM1 = /SEL /SEL2 /RTF /CPIA /LEFT0.50 /TOP0.50 /65
 
-rem Other options, not using DOSPrinter.
-rem Just ignore the output:
-rem LPT3 = DUMMY
-
-rem Let Windows figure out what you want to do:
-rem COM2 = notepad #com2.txt
-
-rem Start a hidden Windows application with the printer data:
-rem COM2 = "windows\system32\notepad.exe" #com2.txt
-
-rem If your DOS application supports PCL or PostScript printers.
-rem You’re lucky: great printouts and nothing to set!
-rem Output to these printers is automatically detected, converted to PDF and shown in the default PDF reader.
-rem For this the program (ps)pcl6.exe is required in the vDos directory.
-rem You can download these at http://www.columbia.edu/~em36/ghostpcl.html (GhostPCL-W32-Binaries.zip).

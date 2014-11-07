@@ -10,7 +10,7 @@ rem f:
 rem cd exact70
 
 d:
-cd fiad.eur
-fiad
-exit
+rem cd fiad.eur
+rem fiad
+rem exit
 
