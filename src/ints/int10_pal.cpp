@@ -5,9 +5,9 @@
 
 #define ACTL_MAX_REG   0x14
 
-static inline void ResetACTL(void)
+static void ResetACTL(void)
 	{
-	IO_Read(vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS) + 6);
+	IO_Read(Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS) + 6);
 	}
 
 void INT10_SetSinglePaletteRegister(Bit8u reg, Bit8u val)
@@ -27,11 +27,11 @@ void INT10_SetAllPaletteRegisters(PhysPt data)
 	for (Bit8u i = 0; i < 0x10; i++)												// First the colors
 		{
 		IO_Write(VGAREG_ACTL_ADDRESS, i);
-		IO_Write(VGAREG_ACTL_WRITE_DATA, vPC_rLodsb(data));
+		IO_Write(VGAREG_ACTL_WRITE_DATA, Mem_Lodsb(data));
 		data++;
 		}
 	IO_Write(VGAREG_ACTL_ADDRESS, 0x11);											// Then the border
-	IO_Write(VGAREG_ACTL_WRITE_DATA, vPC_rLodsb(data));
+	IO_Write(VGAREG_ACTL_WRITE_DATA, Mem_Lodsb(data));
 	IO_Write(VGAREG_ACTL_ADDRESS, 32);												// Enable output and protect palette
 	}
 
@@ -45,39 +45,46 @@ void INT10_GetSinglePaletteRegister(Bit8u reg, Bit8u * val)
 		IO_Write(VGAREG_ACTL_WRITE_DATA, *val);
 		}
 	}
-
+/*
 void INT10_GetAllPaletteRegisters(PhysPt data)
 	{
 	ResetACTL();
 	for (Bit8u i = 0; i < 0x10; i++)												// First the colors
 		{
 		IO_Write(VGAREG_ACTL_ADDRESS, i);
-		vPC_rStosb(data, IO_Read(VGAREG_ACTL_READ_DATA));
+		Mem_Stosb(data, IO_Read(VGAREG_ACTL_READ_DATA));
 		ResetACTL();
 		data++;
 		}
 	IO_Write(VGAREG_ACTL_ADDRESS, 0x11+32);											// Then the border
-	vPC_rStosb(data, IO_Read(VGAREG_ACTL_READ_DATA));
+	Mem_Stosb(data, IO_Read(VGAREG_ACTL_READ_DATA));
+	ResetACTL();
+	}
+*/
+void INT10_GetAllPaletteRegisters(PhysPt data)
+	{
+	Bit8u rByte;
+	ResetACTL();
+	for (Bit8u i = 0; i < 0x10; i++)												// First the colors
+		{
+		IO_Write(VGAREG_ACTL_ADDRESS, i+32);
+		rByte = IO_Read(VGAREG_ACTL_READ_DATA);
+		Mem_Stosb(data, rByte);
+		ResetACTL();
+		data++;
+		}
+	IO_Write(VGAREG_ACTL_ADDRESS, 0x11+32);											// Then the border
+	rByte = IO_Read(VGAREG_ACTL_READ_DATA);
+	Mem_Stosb(data, rByte);
 	ResetACTL();
 	}
 
 void INT10_SetSingleDACRegister(Bit8u index, Bit8u red,Bit8u green, Bit8u blue)
 	{
-	IO_Write(VGAREG_DAC_WRITE_ADDRESS, (Bit8u)index);
-	if ((vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_MODESET_CTL)&0x06) == 0)
-		{
-		IO_Write(VGAREG_DAC_DATA, red);
-		IO_Write(VGAREG_DAC_DATA, green);
-		IO_Write(VGAREG_DAC_DATA, blue);
-		}
-	else
-		{
-		Bit32u i = ((77*red + 151*green + 28*blue) + 0x80) >> 8;					// Calculate clamped intensity, taken from VGABIOS
-		Bit8u ic = (i > 0x3f) ? 0x3f : ((Bit8u)(i & 0xff));
-		IO_Write(VGAREG_DAC_DATA, ic);
-		IO_Write(VGAREG_DAC_DATA, ic);
-		IO_Write(VGAREG_DAC_DATA, ic);
-		}
+	IO_Write(VGAREG_DAC_WRITE_ADDRESS, index);
+	IO_Write(VGAREG_DAC_DATA, red);
+	IO_Write(VGAREG_DAC_DATA, green);
+	IO_Write(VGAREG_DAC_DATA, blue);
 	}
 
 void INT10_GetSingleDACRegister(Bit8u index, Bit8u * red, Bit8u * green, Bit8u * blue)
@@ -91,29 +98,11 @@ void INT10_GetSingleDACRegister(Bit8u index, Bit8u * red, Bit8u * green, Bit8u *
 void INT10_SetDACBlock(Bit16u index, Bit16u count, PhysPt data)
 	{
  	IO_Write(VGAREG_DAC_WRITE_ADDRESS, (Bit8u)index);
-	if ((vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_MODESET_CTL)&0x06) == 0)
+	for (;count > 0; count--)
 		{
-		for (;count > 0; count--)
-			{
-			IO_Write(VGAREG_DAC_DATA, vPC_rLodsb(data++));
-			IO_Write(VGAREG_DAC_DATA, vPC_rLodsb(data++));
-			IO_Write(VGAREG_DAC_DATA, vPC_rLodsb(data++));
-			}
-		}
-	else
-		{
-		for (;count > 0; count--)
-			{
-			Bit8u red = vPC_rLodsb(data++);
-			Bit8u green = vPC_rLodsb(data++);
-			Bit8u blue = vPC_rLodsb(data++);
-
-			Bit32u i = ((77*red + 151*green + 28*blue) + 0x80) >> 8;				// Calculate clamped intensity, taken from VGABIOS
-			Bit8u ic = (i > 0x3f) ? 0x3f : ((Bit8u)(i & 0xff));
-			IO_Write(VGAREG_DAC_DATA, ic);
-			IO_Write(VGAREG_DAC_DATA, ic);
-			IO_Write(VGAREG_DAC_DATA, ic);
-			}
+		IO_Write(VGAREG_DAC_DATA, Mem_Lodsb(data++));
+		IO_Write(VGAREG_DAC_DATA, Mem_Lodsb(data++));
+		IO_Write(VGAREG_DAC_DATA, Mem_Lodsb(data++));
 		}
 	}
 
@@ -122,9 +111,9 @@ void INT10_GetDACBlock(Bit16u index, Bit16u count, PhysPt data)
  	IO_Write(VGAREG_DAC_READ_ADDRESS, (Bit8u)index);
 	for (; count > 0; count--)
 		{
-		vPC_rStosb(data++, IO_Read(VGAREG_DAC_DATA));
-		vPC_rStosb(data++, IO_Read(VGAREG_DAC_DATA));
-		vPC_rStosb(data++, IO_Read(VGAREG_DAC_DATA));
+		Mem_Stosb(data++, IO_Read(VGAREG_DAC_DATA));
+		Mem_Stosb(data++, IO_Read(VGAREG_DAC_DATA));
+		Mem_Stosb(data++, IO_Read(VGAREG_DAC_DATA));
 		}
 	}
 

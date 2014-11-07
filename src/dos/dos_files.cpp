@@ -312,7 +312,7 @@ bool DOS_FindFirst(char * search, Bit16u attr, bool fcb_findfirst)
 	char dir[DOS_PATHLENGTH];														// Split the search in dir and pattern
 	char pattern[DOS_PATHLENGTH];
 	char * find_last = strrchr(fullsearch, '\\');
-	if (!find_last)		// No dir
+	if (!find_last)																	// No dir
 		{
 		strcpy(pattern, fullsearch);
 		dir[0] = 0;
@@ -447,16 +447,14 @@ static bool PathExists(char const* const name)
 
 bool DOS_CreateFile(char const* name, Bit16u attributes, Bit16u* entry)
 	{
-
-	if (DOS_FindDevice(name) != DOS_DEVICES)											// Creating a device is the same as opening it
+	if (DOS_FindDevice(name) != DOS_DEVICES)										// Creating a device is the same as opening it
 		return DOS_OpenFile(name, OPEN_READWRITE, entry);
-
 	char fullname[DOS_PATHLENGTH];
 	Bit8u drive;
 	if (!DOS_MakeName(name, fullname, &drive))
 		return false;
 	Bit8u handle;
-	for (handle = 0; handle < DOS_FILES; handle++)										// Check for a free file handle
+	for (handle = 0; handle < DOS_FILES; handle++)									// Check for a free file handle
 		if (!Files[handle])
 			break;
 	if (handle == DOS_FILES)
@@ -464,14 +462,14 @@ bool DOS_CreateFile(char const* name, Bit16u attributes, Bit16u* entry)
 		DOS_SetError(DOSERR_TOO_MANY_OPEN_FILES);
 		return false;
 		}
-	DOS_PSP psp(dos.psp());																// We have a position in the main table, now find one in the psp table
+	DOS_PSP psp(dos.psp());															// We have a position in the main table, now find one in the psp table
 	*entry = psp.FindFreeFileEntry();
 	if (*entry == 0xff)
 		{
 		DOS_SetError(DOSERR_TOO_MANY_OPEN_FILES);
 		return false;
 		}
-	if (attributes&DOS_ATTR_DIRECTORY)													// Don't allow directories to be created
+	if (attributes&DOS_ATTR_DIRECTORY)												// Don't allow directories to be created
 		{
 		DOS_SetError(DOSERR_ACCESS_DENIED);
 		return false;
@@ -487,19 +485,19 @@ bool DOS_CreateFile(char const* name, Bit16u attributes, Bit16u* entry)
 	return false;
 	}
 
-static int wpOpenDevCount = 0;															// For WP - write file to clipboard, we have to return File not found once and twice normal
-																						// WP opens the file (device) to check if it exists - creates/closes - opens/writes/closes - opens/seeks/closes
+static int wpOpenDevCount = 0;														// For WP - write file to clipboard, we have to return File not found once and twice normal
+																					// WP opens the file (device) to check if it exists - creates/closes - opens/writes/closes - opens/seeks/closes
 static DWORD wpOpenDevTime = 0;
 
 bool DOS_OpenFile(char const* name, Bit8u flags, Bit16u* entry)
 	{
 	Bit16u attr;
-	Bit8u devnum = DOS_FindDevice(name);												// First check for devices
+	Bit8u devnum = DOS_FindDevice(name);											// First check for devices
 	bool device = (devnum != DOS_DEVICES);
 
-	if (device && wpVersion)															// WP - clipboard
+	if (device && wpVersion)														// WP - clipboard
 		{
-		if (GetTickCount() > wpOpenDevTime + 1000)										// Recalibrate after some (1/2 sec) time
+		if (GetTickCount() > wpOpenDevTime + 1000)									// Recalibrate after some (1/2 sec) time
 			{
 			wpOpenDevCount = 0;
 			wpOpenDevTime = GetTickCount();
@@ -547,7 +545,6 @@ bool DOS_OpenFile(char const* name, Bit8u flags, Bit16u* entry)
 		psp.SetFileHandle(*entry, handle);
 		return true;
 		}
-// Look at his
 	// Test if file exists, but opened in read-write mode (and writeprotected)
 	if (Drives[drive]->FileExists(fullname))
 //	if (((flags&3) != OPEN_READ) && Drives[drive]->FileExists(fullname))
@@ -599,6 +596,8 @@ bool DOS_OpenFileExtended(char const* name, Bit16u flags, Bit16u createAttr, Bit
 
 bool DOS_UnlinkFile(char const* const name)
 	{
+	if ((DOS_FindDevice(name) != DOS_DEVICES))
+		return true;
 	char fullname[DOS_PATHLENGTH];
 	Bit8u drive;
 	if (!DOS_MakeName(name, fullname, &drive))
@@ -743,7 +742,7 @@ Bit8u FCB_Parsename(Bit16u seg, Bit16u offset, Bit8u parser, char* string, Bit8u
 	char* string_begin = string;
 	Bit8u ret = 0;
 	if (!(parser & PARSE_DFLT_DRIVE))												// Default drive forced, this intentionally invalidates an extended FCB
-		vPC_rStosb(SegOff2Ptr(seg, offset), 0);
+		Mem_Stosb(SegOff2Ptr(seg, offset), 0);
 	DOS_FCB fcb(seg, offset, false);												// Always a non-extended FCB
 	// First get the old data from the fcb
 #pragma pack (1)
@@ -1028,7 +1027,7 @@ Bit8u DOS_FCBRead(Bit16u seg, Bit16u offset, Bit16u recno)
 		return FCB_READ_NODATA;
 	if (toread < rec_size)															// Zero pad copybuffer to rec_size
 		memset(dos_copybuf+toread, 0, rec_size-toread);
-	vPC_rBlockWrite(dWord2Ptr(dos.dta())+recno*rec_size, dos_copybuf, rec_size);
+	Mem_CopyTo(dWord2Ptr(dos.dta())+recno*rec_size, dos_copybuf, rec_size);
 	if (++cur_rec > 127)
 		{
 		cur_block++;
@@ -1050,7 +1049,7 @@ Bit8u DOS_FCBWrite(Bit16u seg, Bit16u offset, Bit16u recno)
 	Bit32u pos=((cur_block*128)+cur_rec)*rec_size;
 	if (!DOS_SeekFile(fhandle, &pos, DOS_SEEK_SET))
 		return FCB_ERR_WRITE; 
-	vPC_rBlockRead(dWord2Ptr(dos.dta())+recno*rec_size, dos_copybuf, rec_size);
+	Mem_CopyFrom(dWord2Ptr(dos.dta())+recno*rec_size, dos_copybuf, rec_size);
 	Bit16u towrite = rec_size;
 	if (!DOS_WriteFile(fhandle, dos_copybuf, &towrite))
 		return FCB_ERR_WRITE;
@@ -1061,7 +1060,7 @@ Bit8u DOS_FCBWrite(Bit16u seg, Bit16u offset, Bit16u recno)
 		size = pos+towrite;
 	
 	date = DOS_PackDate(dos.date.year, dos.date.month, dos.date.day);				// Ttime doesn't keep track of endofday
-	Bit32u ticks = vPC_rLodsd(BIOS_TIMER);
+	Bit32u ticks = Mem_Lodsd(BIOS_TIMER);
 	Bit32u seconds = (ticks*10)/182;
 	Bit16u hour = (Bit16u)(seconds/3600);
 	Bit16u min = (Bit16u)((seconds % 3600)/60);
@@ -1100,7 +1099,7 @@ Bit8u DOS_FCBIncreaseSize(Bit16u seg, Bit16u offset)
 		size = pos+towrite;
 	
 	date = DOS_PackDate(dos.date.year, dos.date.month, dos.date.day);				// Time doesn't keep track of endofday
-	Bit32u ticks = vPC_rLodsd(BIOS_TIMER);
+	Bit32u ticks = Mem_Lodsd(BIOS_TIMER);
 	Bit32u seconds = (ticks*10)/182;
 	Bit16u hour = (Bit16u)(seconds/3600);
 	Bit16u min = (Bit16u)((seconds % 3600)/60);

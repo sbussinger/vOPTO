@@ -8,7 +8,7 @@
 		EAXId(ADDD);
 		break;
 	CASE_D(0x06)												/* PUSH ES */		
-		Push_32(SegValue(es));
+		CPU_Push32(SegValue(es));
 		break;
 	CASE_D(0x07)												/* POP ES */
 		if (CPU_PopSeg(es,true)) RUNEXCEPTION();
@@ -20,7 +20,7 @@
 	CASE_D(0x0d)												/* OR EAX,Id */
 		EAXId(ORD);break;
 	CASE_D(0x0e)												/* PUSH CS */		
-		Push_32(SegValue(cs));break;
+		CPU_Push32(SegValue(cs));break;
 	CASE_D(0x11)												/* ADC Ed,Gd */
 		RMEdGd(ADCD);break;	
 	CASE_D(0x13)												/* ADC Gd,Ed */
@@ -28,7 +28,7 @@
 	CASE_D(0x15)												/* ADC EAX,Id */
 		EAXId(ADCD);break;
 	CASE_D(0x16)												/* PUSH SS */
-		Push_32(SegValue(ss));break;
+		CPU_Push32(SegValue(ss));break;
 	CASE_D(0x17)												/* POP SS */
 		if (CPU_PopSeg(ss,true)) RUNEXCEPTION();
 		CPU_Cycles++;
@@ -40,7 +40,7 @@
 	CASE_D(0x1d)												/* SBB EAX,Id */
 		EAXId(SBBD);break;
 	CASE_D(0x1e)												/* PUSH DS */		
-		Push_32(SegValue(ds));break;
+		CPU_Push32(SegValue(ds));break;
 	CASE_D(0x1f)												/* POP DS */
 		if (CPU_PopSeg(ds,true)) RUNEXCEPTION();
 		break;
@@ -101,53 +101,53 @@
 	CASE_D(0x4f)												/* DEC EDI */
 		DECD(reg_edi,LoadRd,SaveRd);break;
 	CASE_D(0x50)												/* PUSH EAX */
-		Push_32(reg_eax);break;
+		CPU_Push32(reg_eax);break;
 	CASE_D(0x51)												/* PUSH ECX */
-		Push_32(reg_ecx);break;
+		CPU_Push32(reg_ecx);break;
 	CASE_D(0x52)												/* PUSH EDX */
-		Push_32(reg_edx);break;
+		CPU_Push32(reg_edx);break;
 	CASE_D(0x53)												/* PUSH EBX */
-		Push_32(reg_ebx);break;
+		CPU_Push32(reg_ebx);break;
 	CASE_D(0x54)												/* PUSH ESP */
-		Push_32(reg_esp);break;
+		CPU_Push32(reg_esp);break;
 	CASE_D(0x55)												/* PUSH EBP */
-		Push_32(reg_ebp);break;
+		CPU_Push32(reg_ebp);break;
 	CASE_D(0x56)												/* PUSH ESI */
-		Push_32(reg_esi);break;
+		CPU_Push32(reg_esi);break;
 	CASE_D(0x57)												/* PUSH EDI */
-		Push_32(reg_edi);break;
+		CPU_Push32(reg_edi);break;
 	CASE_D(0x58)												/* POP EAX */
-		reg_eax=Pop_32();break;
+		reg_eax=CPU_Pop32();break;
 	CASE_D(0x59)												/* POP ECX */
-		reg_ecx=Pop_32();break;
+		reg_ecx=CPU_Pop32();break;
 	CASE_D(0x5a)												/* POP EDX */
-		reg_edx=Pop_32();break;
+		reg_edx=CPU_Pop32();break;
 	CASE_D(0x5b)												/* POP EBX */
-		reg_ebx=Pop_32();break;
+		reg_ebx=CPU_Pop32();break;
 	CASE_D(0x5c)												/* POP ESP */
-		reg_esp=Pop_32();break;
+		reg_esp=CPU_Pop32();break;
 	CASE_D(0x5d)												/* POP EBP */
-		reg_ebp=Pop_32();break;
+		reg_ebp=CPU_Pop32();break;
 	CASE_D(0x5e)												/* POP ESI */
-		reg_esi=Pop_32();break;
+		reg_esi=CPU_Pop32();break;
 	CASE_D(0x5f)												/* POP EDI */
-		reg_edi=Pop_32();break;
+		reg_edi=CPU_Pop32();break;
 	CASE_D(0x60)												/* PUSHAD */
 	{
 		Bitu tmpesp = reg_esp;
-		Push_32(reg_eax);Push_32(reg_ecx);Push_32(reg_edx);Push_32(reg_ebx);
-		Push_32(tmpesp);Push_32(reg_ebp);Push_32(reg_esi);Push_32(reg_edi);
+		CPU_Push32(reg_eax);CPU_Push32(reg_ecx);CPU_Push32(reg_edx);CPU_Push32(reg_ebx);
+		CPU_Push32(tmpesp);CPU_Push32(reg_ebp);CPU_Push32(reg_esi);CPU_Push32(reg_edi);
 	}; break;
 	CASE_D(0x61)												/* POPAD */
-		reg_edi=Pop_32();reg_esi=Pop_32();reg_ebp=Pop_32();Pop_32();//Don't save ESP
-		reg_ebx=Pop_32();reg_edx=Pop_32();reg_ecx=Pop_32();reg_eax=Pop_32();
+		reg_edi=CPU_Pop32();reg_esi=CPU_Pop32();reg_ebp=CPU_Pop32();CPU_Pop32();//Don't save ESP
+		reg_ebx=CPU_Pop32();reg_edx=CPU_Pop32();reg_ecx=CPU_Pop32();reg_eax=CPU_Pop32();
 		break;
 	CASE_D(0x62)												/* BOUND Ed */
 		{
 			Bit32s bound_min, bound_max;
 			GetRMrd;GetEAa;
-			bound_min=vPC_rLodsd(eaa);
-			bound_max=vPC_rLodsd(eaa+4);
+			bound_min=Mem_Lodsd(eaa);
+			bound_max=Mem_Lodsd(eaa+4);
 			if ( (((Bit32s)*rmrd) < bound_min) || (((Bit32s)*rmrd) > bound_max) ) {
 				EXCEPTION(5);
 			}
@@ -163,19 +163,19 @@
 				CPU_ARPL(new_sel,*rmrw);
 				*eard=(Bit32u)new_sel;
 			} else {
-				GetEAa;Bitu new_sel=vPC_rLodsw(eaa);
+				GetEAa;Bitu new_sel=Mem_Lodsw(eaa);
 				CPU_ARPL(new_sel,*rmrw);
-				SaveMd(eaa,(Bit32u)new_sel);
+				Mem_Stosd(eaa,(Bit32u)new_sel);
 			}
 		}
 		break;
 	CASE_D(0x68)												/* PUSH Id */
-		Push_32(Fetchd());break;
+		CPU_Push32(Fetchd());break;
 	CASE_D(0x69)												/* IMUL Gd,Ed,Id */
 		RMGdEdOp3(DIMULD,Fetchds());
 		break;
 	CASE_D(0x6a)												/* PUSH Ib */
-		Push_32(Fetchbs());break;
+		CPU_Push32(Fetchbs());break;
 	CASE_D(0x6b)												/* IMUL Gd,Ed,Ib */
 		RMGdEdOp3(DIMULD,Fetchbs());
 		break;
@@ -235,14 +235,14 @@
 			} else {
 				GetEAa;Bit32u id=Fetchd();
 				switch (which) {
-				case 0x00:ADDD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x01: ORD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x02:ADCD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x03:SBBD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x04:ANDD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x05:SUBD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x06:XORD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x07:CMPD(eaa,id,vPC_rLodsd,SaveMd);break;
+				case 0x00:ADDD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x01: ORD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x02:ADCD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x03:SBBD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x04:ANDD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x05:SUBD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x06:XORD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x07:CMPD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
 				}
 			}
 		}
@@ -265,14 +265,14 @@
 			} else {
 				GetEAa;Bit32u id=(Bit32s)Fetchbs();
 				switch (which) {
-				case 0x00:ADDD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x01: ORD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x02:ADCD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x03:SBBD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x04:ANDD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x05:SUBD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x06:XORD(eaa,id,vPC_rLodsd,SaveMd);break;
-				case 0x07:CMPD(eaa,id,vPC_rLodsd,SaveMd);break;
+				case 0x00:ADDD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x01: ORD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x02:ADCD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x03:SBBD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x04:ANDD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x05:SUBD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x06:XORD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
+				case 0x07:CMPD(eaa,id,Mem_Lodsd,Mem_Stosd);break;
 				}
 			}
 		}
@@ -283,21 +283,21 @@
 		{	
 			GetRMrd;Bit32u oldrmrd=*rmrd;
 			if (rm >= 0xc0 ) {GetEArd;*rmrd=*eard;*eard=oldrmrd;}
-			else {GetEAa;*rmrd=vPC_rLodsd(eaa);SaveMd(eaa,oldrmrd);}
+			else {GetEAa;*rmrd=Mem_Lodsd(eaa);Mem_Stosd(eaa,oldrmrd);}
 			break;
 		}
 	CASE_D(0x89)												/* MOV Ed,Gd */
 		{	
 			GetRMrd;
 			if (rm >= 0xc0 ) {GetEArd;*eard=*rmrd;}
-			else {GetEAa;SaveMd(eaa,*rmrd);}
+			else {GetEAa;Mem_Stosd(eaa,*rmrd);}
 			break;
 		}
 	CASE_D(0x8b)												/* MOV Gd,Ed */
 		{	
 			GetRMrd;
 			if (rm >= 0xc0 ) {GetEArd;*rmrd=*eard;}
-			else {GetEAa;*rmrd=vPC_rLodsd(eaa);}
+			else {GetEAa;*rmrd=Mem_Lodsd(eaa);}
 			break;
 		}
 	CASE_D(0x8c)												/* Mov Ew,Sw */
@@ -321,7 +321,7 @@
 					goto illegal_opcode;
 				}
 				if (rm >= 0xc0 ) {GetEArd;*eard=val;}
-				else {GetEAa;SaveMw(eaa,val);}
+				else {GetEAa;Mem_Stosw(eaa,val);}
 				break;
 			}	
 	CASE_D(0x8d)												/* LEA Gd */
@@ -338,10 +338,10 @@
 		}
 	CASE_D(0x8f)												/* POP Ed */
 		{
-			Bit32u val=Pop_32();
+			Bit32u val=CPU_Pop32();
 			GetRM;
 			if (rm >= 0xc0 ) {GetEArd;*eard=val;}
-			else {GetEAa;SaveMd(eaa,val);}
+			else {GetEAa;Mem_Stosd(eaa,val);}
 			break;
 		}
 	CASE_D(0x91)												/* XCHG ECX,EAX */
@@ -403,13 +403,13 @@
 	CASE_D(0xa1)												/* MOV EAX,Od */
 		{
 			GetEADirect;
-			reg_eax=vPC_rLodsd(eaa);
+			reg_eax=Mem_Lodsd(eaa);
 		}
 		break;
 	CASE_D(0xa3)												/* MOV Od,EAX */
 		{
 			GetEADirect;
-			SaveMd(eaa,reg_eax);
+			Mem_Stosd(eaa,reg_eax);
 		}
 		break;
 	CASE_D(0xa5)												/* MOVSD */
@@ -443,19 +443,19 @@
 	CASE_D(0xc1)												/* GRP2 Ed,Ib */
 		GRP2D(Fetchb());break;
 	CASE_D(0xc2)												/* RETN Iw */
-		reg_eip=Pop_32();
+		reg_eip=CPU_Pop32();
 		reg_esp+=Fetchw();
 		continue;
 	CASE_D(0xc3)												/* RETN */
-		reg_eip=Pop_32();
+		reg_eip=CPU_Pop32();
 		continue;
 	CASE_D(0xc4)												/* LES */
 		{	
 			GetRMrd;
 			if (rm >= 0xc0) goto illegal_opcode;
 			GetEAa;
-			if (CPU_SetSegGeneral(es,vPC_rLodsw(eaa+4))) RUNEXCEPTION();
-			*rmrd=vPC_rLodsd(eaa);
+			if (CPU_SetSegGeneral(es,Mem_Lodsw(eaa+4))) RUNEXCEPTION();
+			*rmrd=Mem_Lodsd(eaa);
 			break;
 		}
 	CASE_D(0xc5)												/* LDS */
@@ -463,15 +463,15 @@
 			GetRMrd;
 			if (rm >= 0xc0) goto illegal_opcode;
 			GetEAa;
-			if (CPU_SetSegGeneral(ds,vPC_rLodsw(eaa+4))) RUNEXCEPTION();
-			*rmrd=vPC_rLodsd(eaa);
+			if (CPU_SetSegGeneral(ds,Mem_Lodsw(eaa+4))) RUNEXCEPTION();
+			*rmrd=Mem_Lodsd(eaa);
 			break;
 		}
 	CASE_D(0xc7)												/* MOV Ed,Id */
 		{
 			GetRM;
 			if (rm >= 0xc0) {GetEArd;*eard=Fetchd();}
-			else {GetEAa;SaveMd(eaa,Fetchd());}
+			else {GetEAa;Mem_Stosd(eaa,Fetchd());}
 			break;
 		}
 	CASE_D(0xc8)												/* ENTER Iw,Ib */
@@ -484,7 +484,7 @@
 	CASE_D(0xc9)												/* LEAVE */
 		reg_esp&=cpu.stack.notmask;
 		reg_esp|=(reg_ebp&cpu.stack.mask);
-		reg_ebp=Pop_32();
+		reg_ebp=CPU_Pop32();
 		break;
 	CASE_D(0xca)												/* RETF Iw */
 		{ 
@@ -559,7 +559,7 @@
 		{ 
 			Bit32s addip=Fetchds();
 			SAVEIP;
-			Push_32(reg_eip);
+			CPU_Push32(reg_eip);
 			reg_eip+=addip;
 			continue;
 		}
@@ -605,13 +605,13 @@
 			case 0x01:											/* TEST Ed,Id Undocumented*/
 				{
 					if (rm >= 0xc0 ) {GetEArd;TESTD(*eard,Fetchd(),LoadRd,SaveRd);}
-					else {GetEAa;TESTD(eaa,Fetchd(),vPC_rLodsd,SaveMd);}
+					else {GetEAa;TESTD(eaa,Fetchd(),Mem_Lodsd,Mem_Stosd);}
 					break;
 				}
 			case 0x02:											/* NOT Ed */
 				{
 					if (rm >= 0xc0 ) {GetEArd;*eard=~*eard;}
-					else {GetEAa;SaveMd(eaa,~vPC_rLodsd(eaa));}
+					else {GetEAa;Mem_Stosd(eaa,~Mem_Lodsd(eaa));}
 					break;
 				}
 			case 0x03:											/* NEG Ed */
@@ -621,8 +621,8 @@
 							GetEArd;lf_var1d=*eard;lf_resd=0-lf_var1d;
 						*eard=lf_resd;
 					} else {
-						GetEAa;lf_var1d=vPC_rLodsd(eaa);lf_resd=0-lf_var1d;
-							SaveMd(eaa,lf_resd);
+						GetEAa;lf_var1d=Mem_Lodsd(eaa);lf_resd=0-lf_var1d;
+							Mem_Stosd(eaa,lf_resd);
 					}
 					break;
 				}
@@ -653,15 +653,15 @@
 				break;
 			case 0x02:											/* CALL NEAR Ed */
 				if (rm >= 0xc0 ) {GetEArd;reg_eip=*eard;}
-				else {GetEAa;reg_eip=vPC_rLodsd(eaa);}
-				Push_32(GETIP);
+				else {GetEAa;reg_eip=Mem_Lodsd(eaa);}
+				CPU_Push32(GETIP);
 				continue;
 			case 0x03:											/* CALL FAR Ed */
 				{
 					if (rm >= 0xc0) goto illegal_opcode;
 					GetEAa;
-					Bit32u newip=vPC_rLodsd(eaa);
-					Bit16u newcs=vPC_rLodsw(eaa+4);
+					Bit32u newip=Mem_Lodsd(eaa);
+					Bit16u newcs=Mem_Lodsw(eaa+4);
 					FillFlags();
 					CPU_CALL(true,newcs,newip,GETIP);
 #if CPU_TRAP_CHECK
@@ -674,14 +674,14 @@
 				}
 			case 0x04:											/* JMP NEAR Ed */	
 				if (rm >= 0xc0 ) {GetEArd;reg_eip=*eard;}
-				else {GetEAa;reg_eip=vPC_rLodsd(eaa);}
+				else {GetEAa;reg_eip=Mem_Lodsd(eaa);}
 				continue;
 			case 0x05:											/* JMP FAR Ed */	
 				{
 					if (rm >= 0xc0) goto illegal_opcode;
 					GetEAa;
-					Bit32u newip=vPC_rLodsd(eaa);
-					Bit16u newcs=vPC_rLodsw(eaa+4);
+					Bit32u newip=Mem_Lodsd(eaa);
+					Bit16u newcs=Mem_Lodsw(eaa+4);
 					FillFlags();
 					CPU_JMP(true,newcs,newip);
 #if CPU_TRAP_CHECK
@@ -694,8 +694,8 @@
 				}
 				break;
 			case 0x06:											/* Push Ed */
-				if (rm >= 0xc0 ) {GetEArd;Push_32(*eard);}
-				else {GetEAa;Push_32(vPC_rLodsd(eaa));}
+				if (rm >= 0xc0 ) {GetEArd;CPU_Push32(*eard);}
+				else {GetEAa;CPU_Push32(Mem_Lodsd(eaa));}
 				break;
 			default:
 				LOG(LOG_CPU,LOG_ERROR)("CPU:66:GRP5:Illegal call %2X",which);

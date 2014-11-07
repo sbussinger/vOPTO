@@ -68,12 +68,6 @@ bool WildFileCmp(const char * file, const char * wild)
 DOS_Drive::DOS_Drive()
 	{
 	curdir[0] = 0;
-	info[0] = 0;
-	}
-
-void DOS_Drive::SetLabel(char const * const input)
-	{
-	strcpy(label, input);
 	}
 
 char * DOS_Drive::GetInfo(void)

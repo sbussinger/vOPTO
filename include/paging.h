@@ -4,9 +4,7 @@
 #ifndef VDOS_H
 #include "vDos.h"
 #endif
-#ifndef VDOS_MEM_H
 #include "mem.h"
-#endif
 
 #define MEM_PAGE_SIZE	(4096)
 
@@ -33,7 +31,6 @@ public:
 
 // Some other functions
 void PAGING_Enable(bool enabled);
-bool PAGING_Enabled(void);
 
 Bitu PAGING_GetDirBase(void);
 void PAGING_SetDirBase(Bitu cr3);
@@ -48,5 +45,15 @@ struct PagingBlock {
 };
 
 extern PagingBlock paging; 
+
+__forceinline bool PAGING_Enabled(void)
+	{
+	return paging.enabled;
+	}
+
+__forceinline Bitu PAGING_GetDirBase(void)
+	{
+	return paging.cr3;
+	}
 
 #endif

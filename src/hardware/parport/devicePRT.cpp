@@ -16,8 +16,20 @@ void LPT_CheckTimeOuts(Bit32u mSecsCurr)
 				}
 	}
 
-bool device_PRT::Read(Bit8u * data,Bit16u * size)
+bool device_PRT::Read(Bit8u * data, Bit16u * size)
 	{
+	if (!strcmp("clipboard", destination.c_str()))
+		if (OpenClipboard(NULL))
+			{	
+			if (HANDLE cbText = GetClipboardData(CF_UNICODETEXT))
+				{
+				Bit16u *p = (Bit16u *)GlobalLock(cbText);
+				*size = Unicode2Ascii(p, data, *size);
+				GlobalUnlock(cbText);
+				}
+			CloseClipboard();
+			return true;
+			}
 	*size = 0;
 	return true;
 	}
@@ -42,11 +54,9 @@ bool device_PRT::Write(Bit8u * data, Bit16u * size)
 		else
 			{
 			if (numSpaces && *datasrc != 0x0a && *datasrc != 0x0d)					// Spaces on hold and not end of line
-				{
 				while (numSpaces--)
 					*(datadst++) = ' ';
-				numSpaces = 0;
-				}
+			numSpaces = 0;
 //			if (*datasrc)
 				*(datadst++) = *datasrc;
 			}
@@ -282,7 +292,8 @@ device_PRT::device_PRT(const char *pname, const char* cmd)
 	strcat(strcat(strcpy(tmpAscii, "#"), pname), ".asc");							// Save ASCII data to #LPTx/#COMx.asc (NB LPTx/COMx. cannot be used)
 	strcat(strcat(strcpy(tmpUnicode, "#"), pname), ".txt");							// Save Unicode data to #LPTx/#COMx.asc (NB LPTx/COMx. cannot be used)
 	DPhandle = -1;
-	if (wpVersion && pname[3] == '9')												// LPT9/COM9 in combination with WP
+
+	if (wpVersion && pname[3] == '9' || !stricmp("clip", cmd))					// LPT9/COM9 in combination with WP or "clip"
 		{
 		destination = "clipboard";
 		fastCommit = true;

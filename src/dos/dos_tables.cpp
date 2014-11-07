@@ -3,17 +3,23 @@
 #include "dos_inc.h"
 #include "callback.h"
 
-static Bitu call_casemap;
-
 static Bit16u dos_memseg = DOS_PRIVATE_SEGMENT;
 
-Bit16u DOS_GetMemory(Bit16u pages)
+Bit16u DOS_GetPrivatMemory(Bit16u pages)
 	{
 	Bit16u page = dos_memseg;
 	dos_memseg += pages;
 	if (dos_memseg > DOS_PRIVATE_SEGMENT_END)
 		E_Exit("DOS: Not enough memory for internal tables");
 	return page;
+	}
+
+bool DOS_FreePrivatMemory(Bit16u seg, Bit16u pages)
+	{
+	if (dos_memseg-pages != seg)													// We can only release the last requested memoryblock
+		return false;
+	dos_memseg = seg;
+	return true;
 	}
 
 static Bitu DOS_CaseMapFunc(void)
@@ -51,10 +57,10 @@ void DOS_SetupTables(void)
 	{
 	Bit16u seg;
 	Bitu i;
-	dos.tables.mediaid = SegOff2dWord(DOS_GetMemory(4), 0);
-	dos.tables.tempdta = SegOff2dWord(DOS_GetMemory(4), 0);
-	dos.tables.tempdta_fcbdelete = SegOff2dWord(DOS_GetMemory(4), 0);
-	vPC_rStoswb(dWord2Ptr(dos.tables.mediaid), 0, DOS_DRIVES*2);
+	dos.tables.mediaid = SegOff2dWord(DOS_GetPrivatMemory(4), 0);
+	dos.tables.tempdta = SegOff2dWord(DOS_GetPrivatMemory(4), 0);
+	dos.tables.tempdta_fcbdelete = SegOff2dWord(DOS_GetPrivatMemory(4), 0);
+	Mem_rStosb(dWord2Ptr(dos.tables.mediaid), 0, DOS_DRIVES*2);
 	// Create the DOS Info Block
 	dos_infoblock.SetLocation(DOS_INFOBLOCK_SEG);	// c2woody
    
@@ -62,98 +68,98 @@ void DOS_SetupTables(void)
 
 	// Some weird files >20 detection routine
 	// Possibly obselete when SFT is properly handled
-	vPC_rStosd(DOS_CONSTRING_SEG, 0x0a, 0x204e4f43);
-	vPC_rStosd(DOS_CONSTRING_SEG, 0x1a, 0x204e4f43);
-	vPC_rStosd(DOS_CONSTRING_SEG, 0x2a, 0x204e4f43);
+	Mem_Stosd(DOS_CONSTRING_SEG, 0x0a, 0x204e4f43);
+	Mem_Stosd(DOS_CONSTRING_SEG, 0x1a, 0x204e4f43);
+	Mem_Stosd(DOS_CONSTRING_SEG, 0x2a, 0x204e4f43);
 
 	// Create a CON device driver
 	seg = DOS_CONDRV_SEG;
- 	vPC_rStosd(seg, 0x00, 0xffffffff);				// Next ptr
- 	vPC_rStosw(seg, 0x04, 0x8013);					// Attributes
-  	vPC_rStosd(seg, 0x06, 0xffffffff);				// Strategy routine
-  	vPC_rStosd(seg, 0x0a, 0x204e4f43);				// Driver name
-  	vPC_rStosd(seg, 0x0e, 0x20202020);				// Driver name
+ 	Mem_Stosd(seg, 0x00, 0xffffffff);				// Next ptr
+ 	Mem_Stosw(seg, 0x04, 0x8013);					// Attributes
+  	Mem_Stosd(seg, 0x06, 0xffffffff);				// Strategy routine
+  	Mem_Stosd(seg, 0x0a, 0x204e4f43);				// Driver name
+  	Mem_Stosd(seg, 0x0e, 0x20202020);				// Driver name
 	dos_infoblock.SetDeviceChainStart(SegOff2dWord(seg, 0));
    
 	// Create a fake Current Directory Structure
 	seg = DOS_CDS_SEG;
-	vPC_rStosd(seg, 0x00, 0x005c3a43);
+	Mem_Stosd(seg, 0x00, 0x005c3a43);
 	dos_infoblock.SetCurDirStruct(SegOff2dWord(seg, 0));
 
 	// Allocate DCBS DOUBLE BYTE CHARACTER SET LEAD-BYTE TABLE
-	dos.tables.dbcs = SegOff2dWord(DOS_GetMemory(12), 0);
-	vPC_rStosd(dWord2Ptr(dos.tables.dbcs), 0);	// empty table
+	dos.tables.dbcs = SegOff2dWord(DOS_GetPrivatMemory(12), 0);
+	Mem_Stosd(dWord2Ptr(dos.tables.dbcs), 0);	// empty table
 	// FILENAME CHARACTER TABLE
-	dos.tables.filenamechar = SegOff2dWord(DOS_GetMemory(2), 0);
+	dos.tables.filenamechar = SegOff2dWord(DOS_GetPrivatMemory(2), 0);
 	PhysPt p_addr = dWord2Ptr(dos.tables.filenamechar);
 	for (i = 0; i < sizeof(filenamechartable); i++)
-		vPC_rStosb(p_addr++, filenamechartable[i]);
+		Mem_Stosb(p_addr++, filenamechartable[i]);
 /*
-	vPC_rStosw(dWord2Ptr(dos.tables.filenamechar)+0x00, 0x16);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x02, 0x01);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x03, 0x00);	// allowed chars from
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x04, 0xff);	// ...to
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x05, 0x00);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x06, 0x00);	// excluded chars from
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x07, 0x20);	// ...to
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x08, 0x02);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x09, 0x0e);	// number of illegal separators
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x0a, 0x2e);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x0b, 0x22);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x0c, 0x2f);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x0d, 0x5c);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x0e, 0x5b);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x0f, 0x5d);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x10, 0x3a);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x11, 0x7c);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x12, 0x3c);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x13, 0x3e);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x14, 0x2b);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x15, 0x3d);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x16, 0x3b);
-	vPC_rStosb(dWord2Ptr(dos.tables.filenamechar)+0x17, 0x2c);
+	Mem_Stosw(dWord2Ptr(dos.tables.filenamechar)+0x00, 0x16);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x02, 0x01);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x03, 0x00);	// allowed chars from
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x04, 0xff);	// ...to
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x05, 0x00);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x06, 0x00);	// excluded chars from
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x07, 0x20);	// ...to
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x08, 0x02);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x09, 0x0e);	// number of illegal separators
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x0a, 0x2e);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x0b, 0x22);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x0c, 0x2f);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x0d, 0x5c);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x0e, 0x5b);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x0f, 0x5d);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x10, 0x3a);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x11, 0x7c);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x12, 0x3c);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x13, 0x3e);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x14, 0x2b);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x15, 0x3d);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x16, 0x3b);
+	Mem_Stosb(dWord2Ptr(dos.tables.filenamechar)+0x17, 0x2c);
 */
 	// COLLATING SEQUENCE TABLE + UPCASE TABLE
 	// 256 bytes for col table, 128 for upcase, 4 for number of entries
-	dos.tables.collatingseq = SegOff2dWord(DOS_GetMemory(25), 0);
-	vPC_rStosw(dWord2Ptr(dos.tables.collatingseq), 0x100);
+	dos.tables.collatingseq = SegOff2dWord(DOS_GetPrivatMemory(25), 0);
+	Mem_Stosw(dWord2Ptr(dos.tables.collatingseq), 0x100);
 	for (i = 0; i < 256; i++)
-		vPC_rStosb(dWord2Ptr(dos.tables.collatingseq)+i+2, i);
+		Mem_Stosb(dWord2Ptr(dos.tables.collatingseq)+i+2, i);
 	dos.tables.upcase = dos.tables.collatingseq+258;
-	vPC_rStosw(dWord2Ptr(dos.tables.upcase), 0x80);
+	Mem_Stosw(dWord2Ptr(dos.tables.upcase), 0x80);
 	for (i = 0; i < 128; i++)
-		vPC_rStosb(dWord2Ptr(dos.tables.upcase)+i+2, 0x80+i);
+		Mem_Stosb(dWord2Ptr(dos.tables.upcase)+i+2, 0x80+i);
  
 	// Create a fake FCB SFT
-	seg = DOS_GetMemory(4);
-	vPC_rStosd(seg, 0, 0xffffffff);			// Last File Table
-	vPC_rStosw(seg, 4, 100);				// File Table supports 100 files
+	seg = DOS_GetPrivatMemory(4);
+	Mem_Stosd(seg, 0, 0xffffffff);			// Last File Table
+	Mem_Stosw(seg, 4, 100);				// File Table supports 100 files
 	dos_infoblock.SetFCBTable(SegOff2dWord(seg, 0));
 
 	// Create a fake DPB
-	dos.tables.dpb = DOS_GetMemory(2);
+	dos.tables.dpb = DOS_GetPrivatMemory(2);
 	for(Bitu d = 0; d < 26; d++)
-		vPC_rStosb(dos.tables.dpb, d, d);
+		Mem_Stosb(dos.tables.dpb, d, d);
 
 	// Create a fake disk buffer head
-	seg = DOS_GetMemory(6);
+	seg = DOS_GetPrivatMemory(6);
 
 	for (Bitu ct = 0; ct < 0x20; ct++)
-		vPC_rStosb(seg, ct, 0);
-	vPC_rStosw(seg, 0x00, 0xffff);		// forward ptr
-	vPC_rStosw(seg, 0x02, 0xffff);		// backward ptr
-	vPC_rStosb(seg, 0x04, 0xff);		// not in use
-	vPC_rStosb(seg, 0x0a, 0x01);		// number of FATs
-	vPC_rStosd(seg, 0x0d, 0xffffffff);	// pointer to DPB
+		Mem_Stosb(seg, ct, 0);
+	Mem_Stosw(seg, 0x00, 0xffff);		// forward ptr
+	Mem_Stosw(seg, 0x02, 0xffff);		// backward ptr
+	Mem_Stosb(seg, 0x04, 0xff);		// not in use
+	Mem_Stosb(seg, 0x0a, 0x01);		// number of FATs
+	Mem_Stosd(seg, 0x0d, 0xffffffff);	// pointer to DPB
 	dos_infoblock.SetDiskBufferHeadPt(SegOff2dWord(seg, 0));
 
 	// Set buffers to a nice value
 	dos_infoblock.SetBuffers(50, 50);
 
 	// case map routine INT 0x21 0x38
-	call_casemap = CALLBACK_Allocate();
-	CALLBACK_Setup(call_casemap, DOS_CaseMapFunc, CB_RETF, "DOS CaseMap");
+	Bitu cbID = CALLBACK_Allocate();
+	CALLBACK_Setup(cbID, DOS_CaseMapFunc, CB_RETF);									// DOS CaseMap
 	// Add it to country structure
-	*(Bit32u *)(country_info + 0x12) = CALLBACK_RealPointer(call_casemap);
+	*(Bit32u *)(country_info + 0x12) = CALLBACK_RealPointer(cbID);
 	dos.tables.country = country_info;
 	}

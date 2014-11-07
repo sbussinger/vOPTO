@@ -12,15 +12,11 @@ char *lTrim(char *str);
 char *rTrim(char *str);
 char *rSpTrim(char *str);
 char *lrTrim(char * str);
-char * upcase(char * str);
-char * lowcase(char * str);
+void upcase(char * str);
 
 bool ScanCMDBool(char * cmd,char const * const check);
 char * ScanCMDRemain(char * cmd);
 char * StripWord(char *&cmd);
-
-void upcase(std::string &str);
-void lowcase(std::string &str);
 
 extern Bit16u cpMap[];
 

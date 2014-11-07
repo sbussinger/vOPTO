@@ -8,10 +8,9 @@ extern Bit32s CPU_CycleLeft;
 //extern Bit32s CPU_CycleMax;
 
 typedef void (PIC_EOIHandler) (void);
-typedef void (* PIC_EventHandler)(Bitu val);
+typedef void (* PIC_EventHandler)(void);
 
 
-#define PIC_MAXIRQ 15
 #define PIC_NOIRQ 0xFF
 
 extern Bitu PIC_IRQCheck;
@@ -40,7 +39,7 @@ void PIC_runIRQs(void);
 bool PIC_RunQueue(void);
 
 //Delay in milliseconds
-void PIC_AddEvent(PIC_EventHandler handler, float delay, Bitu val=0);
+void PIC_AddEvent(PIC_EventHandler handler, float delay);
 void PIC_RemoveEvents(PIC_EventHandler handler);
 
 void PIC_SetIRQMask(Bitu irq, bool masked);

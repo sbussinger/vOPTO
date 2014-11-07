@@ -4,14 +4,14 @@
 #include <vector>
 #include <sys/types.h>
 #include "dos_system.h"
-#include "shell.h" /* for DOS_Shell */
+#include "shell.h"
 
 bool WildFileCmp(const char * file, const char * wild);
 
 class localDrive : public DOS_Drive
 	{
 public:
-	localDrive(const char * startdir, Bit16u _bytes_sector, Bit8u _sectors_cluster, Bit16u _total_clusters, Bit16u _free_clusters, Bit8u _mediaid);
+	localDrive(const char* startdir, const char* _label);
 	virtual bool FileOpen(DOS_File* * file, char* name, Bit32u flags);
 	virtual bool FileCreate(DOS_File* * file, char* name, Bit16u attributes);
 	virtual bool FileUnlink(char* name);
@@ -24,18 +24,9 @@ public:
 	virtual bool Rename(char* oldname, char* newname);
 	virtual bool AllocationInfo(Bit16u* _bytes_sector, Bit8u* _sectors_cluster, Bit16u* _total_clusters, Bit16u* _free_clusters);
 	virtual bool FileExists(const char* name);
-	virtual Bit8u GetMediaByte(void);
 private:
 	char basedir[MAX_PATH_LEN];
 	char srch_dir[MAX_PATH_LEN];
-
-	struct {
-		Bit16u bytes_sector;
-		Bit8u sectors_cluster;
-		Bit16u total_clusters;
-		Bit16u free_clusters;
-		Bit8u mediaid;
-	} allocation;
 	};
 
 struct VFILE_Block;
@@ -56,7 +47,6 @@ public:
 	bool Rename(char * oldname, char * newname);
 	bool AllocationInfo(Bit16u * _bytes_sector, Bit8u * _sectors_cluster, Bit16u * _total_clusters, Bit16u * _free_clusters);
 	bool FileExists(const char* name);
-	Bit8u GetMediaByte(void);
 private:
 	VFILE_Block * search_file;
 	};

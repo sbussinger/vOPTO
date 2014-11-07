@@ -8,7 +8,10 @@
 #include "parport.h"
 #include "support.h"
 
-char vDosVersion[11];
+#include "mouse.h"
+#include "vga.h"
+
+char vDosVersion[] = "2014.10.19";
 
 // The whole load of startups for all the subfunctions
 void GUI_StartUp();
@@ -37,13 +40,25 @@ void SHELL_Init();
 void INT10_Init();
 
 static Bit32u mSecsLast = 0;
+int winHide10th = 0;
+bool winHidden = true;
+DWORD hideWinTill;
 bool usesMouse;
 int wpVersion;																		// 1 - 99 (mostly 51..62, negative value will exclude some WP additions)
+bool mouseWP6x;																		// WP6.x with Mouse Driver (Absolute/Pen)
+int wsVersion;																		// For now just 0 (no WordStar) or 1
+int wsBackGround;																	// BackGround text color WordStar
+Bit8u initialvMode = 3;																// Initial videomode, 3 = color, 7 = Hercules for as far it works
+int codepage = 0;																	// Current code page, defaults to Windows OEM
+
 
 Bit8u tempBuff1K [1024];	
 Bit8u tempBuff2K [2*1024];	
 Bit8u tempBuff4K [4*1024];
 Bit8u tempBuff32K [32*1024];
+Bitu lastOpcode;
+
+bool EMS_present = false;
 
 Bit32s CPU_CycleMax = CPU_CycleHigh;
 
@@ -53,6 +68,8 @@ void RunPC(void)
 		{
 		if (PIC_RunQueue())
 			{
+			if (mouse_event_type && GETFLAG(IF))
+				CPU_HW_Interrupt(0x74);
 			Bits ret = (*cpudecoder)();
 			if (ret < 0)
 				return;
@@ -72,8 +89,6 @@ void RunPC(void)
 					CPU_CycleMax -= 100;											// Decrease cycles
 				else if (idleCount <= idleTrigger  && CPU_CycleMax < CPU_CycleHigh)
 					CPU_CycleMax += 1000;											// Fire up again
-				if (idleCount >= idleTrigger)
-					idleCount = 0;
 				}
 			mSecsLast = mSecsNew;
 			idleCount = 0;
@@ -262,12 +277,8 @@ static void ConfShowErrors()
 
 void vDOS_Init(void)
 	{
-    char sYear[5], sMonth[4];
-	int nDay =10;
-    static const char names[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+	hideWinTill = GetTickCount()+2500;												// Auto hidden till first keyboard check, parachute at 2.5 secs
 
-    sscanf(__DATE__, "%s %d %s", sMonth, &nDay, sYear);
-	sprintf(vDosVersion, "%s.%02d.%02d", sYear, (strstr(names, sMonth)-names)/3+1, nDay);
 	LOG_MSG("vDos version: %s", vDosVersion);
 
 	ConfAddInt("scale", 0);
@@ -280,8 +291,7 @@ void vDOS_Init(void)
 	ConfAddInt("cols", 80);
 	ConfAddBool("frame", false);
 	ConfAddString("font", "");
-	ConfAddInt("hide", 5);
-	ConfAddInt("wp", 0);
+	ConfAddString("wp", "");
 	ParseConfigFile();
 
 	GUI_StartUp();
@@ -299,7 +309,7 @@ void vDOS_Init(void)
 	KEYBOARD_Init();
 	BIOS_Init();
 	INT10_Init();
-	MOUSE_Init();																	// Must be after int10 as it uses CurMode
+	MOUSE_Init();
 	SERIAL_Init();
 	PARALLEL_Init();
 	// All the DOS related stuff

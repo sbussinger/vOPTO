@@ -7,9 +7,7 @@
 #ifndef VDOS_REGS_H
 #include "regs.h"
 #endif
-#ifndef VDOS_MEM_H
 #include "mem.h"
-#endif
 
 // CPU Cycle Timing
 extern Bit32s CPU_Cycles;

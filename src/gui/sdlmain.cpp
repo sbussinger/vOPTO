@@ -13,11 +13,11 @@
 #include "vga.h"
 #include "..\ints\int10.h"
 #include "dos_inc.h"
+#include "mem.h"
+#include "mouse.h"
 #include <Shellapi.h>
 
-#define WIN32_LEAN_AND_MEAN
-
-#define WM_SC_SYSMENUABOUT		0x1110						// Pretty arbitrary, just needs to be < 0xF000
+#define WM_SC_SYSMENUABOUT		0x1110												// Pretty arbitrary, just needs to be < 0xF000
 #define WM_SC_SYSMENUPCOPY		(WM_SC_SYSMENUABOUT + 1)
 #define WM_SC_SYSMENUPASTE		(WM_SC_SYSMENUABOUT + 2)
 #define WM_SC_SYSMENUDECREASE	(WM_SC_SYSMENUABOUT + 3)
@@ -37,8 +37,7 @@ alt_rgb altBGR0[16], altBGR1[16];
 
 
 struct SDL_Block {
-	bool	active;											// If this isn't set don't draw
-	bool	updating;
+	bool	active;																	// If this isn't set don't draw
 	short	scale;
 	Bit16u	width;
 	Bit16u	height;
@@ -50,23 +49,18 @@ HWND	sdlHwnd;
 
 static DWORD ttfSize= sizeof(vDosTTFbi);
 static void * ttfFont = vDosTTFbi;
-static bool colorsLocked = false;
 static bool winFramed;
 static bool screendump = false;
+static bool fontBoxed = false;														// ASCII 176-223 box/lines or extended ASCII
 static int prevPointSize = 0;
 static RECT prevPosition;
 static int winPerc = 75;
 static int initialX = -1;
 static int initialY = -1;
 
-bool winHidden = true;
 bool aboutShown = false;
 bool selectingText = false;
-//DWORD cursorDrawnAt = 0;
-//bool cursorDraw = false;
 int selStartX, selPosX1, selPosX2, selStartY, selPosY1, selPosY2;
-
-DWORD hideWinTill;
 
 Render_ttf ttf;
 
@@ -77,44 +71,46 @@ static SDL_Rect ttf_textClip = {0, 0, 0, 0};
 
 static WNDPROC fnSDLDefaultWndProc;
 
+static int fullLeftOff, fullTopOff;
+
+
 static void TimedSetSize()
 	{
-	if (ttf.inUse && ttf.fullScrn)
-		sdl.surface = SDL_SetVideoMode(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), 32, SDL_SWSURFACE|SDL_NOFRAME);
+	if (vga.mode == M_TEXT && ttf.fullScrn)
+		{
+		fullLeftOff = GetSystemMetrics(SM_CXSCREEN);
+		fullTopOff = GetSystemMetrics(SM_CYSCREEN);
+		sdl.surface = SDL_SetVideoMode(fullLeftOff, fullTopOff, 32, SDL_SWSURFACE|SDL_NOFRAME);
+		fullLeftOff = (fullLeftOff-sdl.width)/2;
+		fullTopOff = (fullTopOff-sdl.height)/2;
+		}
 	else
 		sdl.surface = SDL_SetVideoMode(sdl.width, sdl.height, 32, SDL_SWSURFACE|(winFramed ? 0 : SDL_NOFRAME));
 	if (!sdl.surface)
 		E_Exit("SDL: Failed to create surface");
-	if (initialX >= 0)																			// Position window (only once at startup)
+	if (initialX >= 0)																// Position window (only once at startup)
 		{
 		RECT SDLRect;
-		GetWindowRect(sdlHwnd, &SDLRect);														// Window has to be shown completely
+		GetWindowRect(sdlHwnd, &SDLRect);											// Window has to be shown completely
 		if (initialX+SDLRect.right-SDLRect.left <= GetSystemMetrics(SM_CXSCREEN) && initialY+SDLRect.bottom-SDLRect.top <= GetSystemMetrics(SM_CYSCREEN))
 			MoveWindow(sdlHwnd, initialX, initialY, SDLRect.right - SDLRect.left, SDLRect.bottom - SDLRect.top, true);
 		initialX = -1;
 		}
-	SDL_ShowCursor(!ttf.fullScrn);
+	SDL_ShowCursor(!mouseWP6x && (!ttf.fullScrn || usesMouse));
 	sdl.active = true;
 	}
 
-void GFX_SetSize(Bitu width, Bitu height)
+void GFX_SetSize()
 	{
-	if (sdl.updating)
-		GFX_EndUpdate();
-
-	if (ttf.SDL_font && render.cache.width == 720 && render.cache.height == 400)		// 720*400 should be text
+	if (vga.mode == M_TEXT)
 		{
 		sdl.width = ttf.cols*ttf.width;
 		sdl.height = ttf.lins*ttf.height;
-		ttf.inUse = true;
 		}
 	else
 		{
-// 		SDL_WM_GrabInput(SDL_GRAB_ON);
-//		SDL_ShowCursor(SDL_DISABLE);
 		sdl.width = render.cache.width * sdl.scale;
 		sdl.height = render.cache.height * sdl.scale;
-		ttf.inUse = false;
 		}
 	if (!winHidden)
 		TimedSetSize();
@@ -122,26 +118,45 @@ void GFX_SetSize(Bitu width, Bitu height)
 
 bool GFX_StartUpdate()
 	{
-	if (winHidden)
-		if (GetTickCount() >= hideWinTill)
+	if (winHidden && GetTickCount() >= hideWinTill)
+		{
+		winHidden = false;
+		TimedSetSize();
+		}
+	return sdl.active;
+	}
+
+int GFX_SetCodePage(int cp)
+	{
+	unsigned char cTest[256];														// ASCII format
+	for (int i = 0; i < 256; i++)
+		cTest[i] = i;
+	Bit16u wcTest[256];
+	if (MultiByteToWideChar(cp, 0, (char*)cTest, 256, NULL, 0) == 256)
+		{
+		int notMapped = 0;															// Number of characters not defined in font
+		MultiByteToWideChar(cp, 0, (char*)cTest, 256, (LPWSTR)wcTest, 256);
+		Bit16u unimap;	
+		for (int c = 128+(TTF_GlyphIsProvided(ttf.SDL_font, 0x20ac) ? 1 : 0); c < 256; c++)	// Check all characters above 128 (128 = always Euro symbol if defined in font)
 			{
-			winHidden = false;
-			TimedSetSize();
+			unimap = wcTest[c];
+			if (!fontBoxed || c < 176 || c > 223)
+				{
+				if (!TTF_GlyphIsProvided(ttf.SDL_font, unimap))
+					notMapped++;
+				else 
+					cpMap[c] = unimap;
+				}
 			}
-	if (!sdl.active || sdl.updating)
-		return false;
-	sdl.updating = true;
-	return true;
+		return notMapped;
+		}
+	return -1;																		// Code page not set
 	}
 
 void GFX_SelectFontByPoints(int ptsize)
 	{
-	bool initCP = true;
 	if (ttf.SDL_font != 0)
-		{
 		TTF_CloseFont(ttf.SDL_font);
-		initCP = false;
-		}
 	SDL_RWops *rwfont = SDL_RWFromConstMem(ttfFont, (int)ttfSize);
 	ttf.SDL_font = TTF_OpenFontRW(rwfont, 1, ptsize);
 
@@ -155,36 +170,10 @@ void GFX_SelectFontByPoints(int ptsize)
 		}
 	else
 		ttf.offX = ttf.offY = 0;
-	if (initCP)
+	if (!codepage)
 		{
 		int cp = GetOEMCP();
-		LOG_MSG("System OEM codepage: %d\n", cp);
-		unsigned char cTest[256];					// ASCII format
-		for (int i = 0; i < 256; i++)
-			cTest[i] = i;
-		Bit16u wcTest[256];
-		int size = MultiByteToWideChar(cp, 0, (char*)cTest, 256, NULL, 0);
-		if (size == 256)
-			{
-			MultiByteToWideChar(cp, 0, (char*)cTest, 256, (LPWSTR)wcTest, size);
-			Bit16u unimap;	
-			bool notMapped = false;
-			for (int c = 128 + (TTF_GlyphIsProvided(ttf.SDL_font, 0x20ac) ? 1 : 0); c < 256; c++)		// Check all characters above 128 (128 = always Euro symbol if defined in font)
-				{
-				unimap = wcTest[c];
-				if (!TTF_GlyphIsProvided(ttf.SDL_font, unimap))
-					{
-					if (!notMapped)
-						{
-						LOG_MSG("ASCII Unicode Fixups");
-						notMapped = true;
-						}
-					LOG_MSG("  %3d    %4x  %4x", c, unimap, cpMap[c]);
-					}
-				else 
-					cpMap[c] = unimap;
-				}
-			}
+		codepage = GFX_SetCodePage(cp) == -1 ? 437 : cp;
 		}
 	}
 
@@ -192,13 +181,13 @@ void GFX_SelectFontByPoints(int ptsize)
 static alt_rgb *rgbColors = (alt_rgb*)render.pal.rgb;
 
 static int prev_sline = -1;
-static bool hasFocus = true;						// only used if not framed
-static bool hasMinButton = false;					// ,,
+static bool hasFocus = true;														// Only used if not framed
+static bool hasMinButton = false;													// ,,
 static bool cursor_enabled = false;
 
 bool dumpScreen(void)
 	{
-	if (!ttf.inUse)
+	if (vga.mode != M_TEXT)
 		return false;
 	FILE * fp;
 	if (!(fp = fopen("screen.txt", "wb")))
@@ -206,7 +195,7 @@ bool dumpScreen(void)
 
 	Bit16u textLine[txtMaxCols+1];
 	Bit16u *curAC = curAttrChar;
-	fprintf(fp, "\xff\xfe");													// It's a Unicode text file
+	fprintf(fp, "\xff\xfe");														// It's a Unicode text file
 	for (int lineno = 0; lineno < ttf.lins; lineno++)
 		{
 		int chars = 0;
@@ -217,13 +206,13 @@ bool dumpScreen(void)
 			if (textChar != 32)
 				chars = xPos+1;
 			}
-		if (chars)																// If not blank line
-			fwrite(textLine, 2, chars, fp);										// Write truncated
-		if (lineno < ttf.lins-1)												// Append linefeed for all but the last line
+		if (chars)																	// If not blank line
+			fwrite(textLine, 2, chars, fp);											// Write truncated
+		if (lineno < ttf.lins-1)													// Append linefeed for all but the last line
 			fwrite("\x0d\x00\x0a\x00", 1, 4, fp);
 		}
 	fclose(fp);
-	ShellExecute(NULL, "open", "screen.txt", NULL, NULL, SW_SHOWNORMAL);		// Open text file
+	ShellExecute(NULL, "open", "screen.txt", NULL, NULL, SW_SHOWNORMAL);			// Open text file
 	return true;
 	}
 
@@ -243,22 +232,20 @@ void getClipboard(void)
 
 void GFX_EndTextLines(void)
 	{
-	if (aboutShown || selectingText)						// The easy way: don't update if About box or selectting text
+	if (aboutShown || selectingText)												// The easy way: don't update if About box or selectting text
 		return;
-	Uint16 unimap[txtMaxCols+1];							// max+1 charaters in a line
-	int xmin = ttf.cols;									// keep track of changed area
+	Uint16 unimap[txtMaxCols+1];													// Max+1 charaters in a line
+	int xmin = ttf.cols;															// Keep track of changed area
 	int ymin = ttf.lins;
 	int xmax = -1;
 	int ymax = -1;
-	Bit16u *curAC = curAttrChar;							// pointer to old/current buffer
-	Bit16u *newAC = newAttrChar;							// pointer to new/changed buffer
+	Bit16u *curAC = curAttrChar;													// Old/current buffer
+	Bit16u *newAC = newAttrChar;													// New/changed buffer
 
-	if (ttf.cursor >= 0 && ttf.cursor < ttf.cols*ttf.lins)	// hide/restore (previous) cursor-character if we had one
-
-//		if (cursor_enabled && (vga.draw.cursor.sline > vga.draw.cursor.eline || vga.draw.cursor.sline > 15))
+	if (ttf.cursor >= 0 && ttf.cursor < ttf.cols*ttf.lins)							// Hide/restore (previous) cursor-character if we had one
 //		if (ttf.cursor != vga.draw.cursor.address>>1 || (vga.draw.cursor.enabled !=  cursor_enabled) || vga.draw.cursor.sline > vga.draw.cursor.eline || vga.draw.cursor.sline > 15)
 		if (ttf.cursor != vga.draw.cursor.address>>1 || vga.draw.cursor.sline > vga.draw.cursor.eline || vga.draw.cursor.sline > 15)
-			curAC[ttf.cursor] = newAC[ttf.cursor]^0xf0f0;	// force redraw (differs)
+			curAC[ttf.cursor] = newAC[ttf.cursor]^0xf0f0;							// Force redraw (differs)
 
 	ttf_textClip.h = ttf.height;
 	ttf_textClip.y = 0;
@@ -266,19 +253,9 @@ void GFX_EndTextLines(void)
 		{
 		if (!hasFocus)
 			if (y == 0)																// Dim topmost line
-				{
-				if (!colorsLocked)
-					for (int i = 0; i < 16; i++)
-						{
-						altBGR0[i].blue = (render.pal.rgb[i].blue*2 + 128)/4;
-						altBGR0[i].green = (render.pal.rgb[i].green*2 + 128)/4;
-						altBGR0[i].red = (render.pal.rgb[i].red*2+ 128)/4;
-						}
 				rgbColors = altBGR0;
-				}
 			else if (y == 1)
-				rgbColors = colorsLocked? altBGR1 : (alt_rgb*)render.pal.rgb;		// undim the rest
-
+				rgbColors = altBGR1;												// Undim the rest
 
 		ttf_textRect.y = ttf.offY+y*ttf.height;
 		for (int x = 0; x < ttf.cols; x++)
@@ -292,16 +269,15 @@ void GFX_EndTextLines(void)
 
 				Bit8u colorBG = newAC[x]>>12;
 				Bit8u colorFG = (newAC[x]>>8)&15;
-/*
-if ((colorFG & 7) == 1)
-	{
-	TTF_SetFontStyle(ttf.SDL_font, TTF_STYLE_UNDERLINE);
-	colorFG |= 7;
-	}
-else
-	TTF_SetFontStyle(ttf.SDL_font, TTF_STYLE_NORMAL);
-*/
-				if (wpVersion > 0)																// If WP and not negative (color value to text attribute excluded)
+				if (CurMode->mode == 7)												// Mono (Hercules)
+					{
+					TTF_SetFontStyle(ttf.SDL_font, (colorFG&7) == 1 ? TTF_STYLE_UNDERLINE : TTF_STYLE_NORMAL);
+					if ((colorFG&0xa) == colorFG && colorBG == 0)
+						colorFG = 8;
+					else if (colorFG&7)
+						colorFG |= 7;
+					}
+				else if (wpVersion > 0)												// If WP and not negative (color value to text attribute excluded)
 					{
 					if (colorFG == 0xe && colorBG == 1)
 						{
@@ -317,7 +293,21 @@ else
 					else
 						TTF_SetFontStyle(ttf.SDL_font, TTF_STYLE_NORMAL);
 					}
-
+				else if (wsVersion)													// If WordStar
+					{
+					int style = 0;
+					if (colorBG&8)													// If "blinking" set, modify attributes
+						{
+						if (colorBG&1)
+							style |= TTF_STYLE_UNDERLINE;
+						if (colorBG&2)
+							style |= TTF_STYLE_ITALIC;
+						if (colorBG&4)
+							style |= TTF_STYLE_STRIKETHROUGH;
+						colorBG = wsBackGround;										// Background color (text) is fixed at this
+						}
+					TTF_SetFontStyle(ttf.SDL_font, style);
+					}
 				ttf_bgColor.b = rgbColors[colorBG].blue;
 				ttf_bgColor.g = rgbColors[colorBG].green;
  				ttf_bgColor.r = rgbColors[colorBG].red;
@@ -327,15 +317,15 @@ else
 
 				int x1 = x;
 				Bit8u ascii = newAC[x]&255;
-				if (ascii > 175 && ascii < 179)						// special: shade characters 176-178
+				if (ascii > 175 && ascii < 179)										// Special: shade characters 176-178
 					{
 					ttf_bgColor.b = (ttf_bgColor.b*(179-ascii) + ttf_fgColor.b*(ascii-175))>>2;
 					ttf_bgColor.g = (ttf_bgColor.g*(179-ascii) + ttf_fgColor.g*(ascii-175))>>2;
 					ttf_bgColor.r = (ttf_bgColor.r*(179-ascii) + ttf_fgColor.r*(ascii-175))>>2;
-					do												// as long char and foreground/background color equal
+					do																// As long char and foreground/background color equal
 						{
 						curAC[x] = newAC[x];
-						unimap[x-x1] = ' ';							// shaded space
+						unimap[x-x1] = ' ';											// Shaded space
 						x++;
 						}
 					while (x < ttf.cols && newAC[x] == newAC[x1] && newAC[x] != curAC[x]);
@@ -343,7 +333,7 @@ else
 				else
 					{
 					Bit8u color = newAC[x]>>8;
-					do												// as long foreground/background color equal
+					do																// As long foreground/background color equal
 						{
 						curAC[x] = newAC[x];
 						unimap[x-x1] = cpMap[ascii];
@@ -365,31 +355,15 @@ else
 		curAC += ttf.cols;
 		newAC += ttf.cols;
 		}
-
-	if (hasFocus && vga.draw.cursor.enabled && vga.draw.cursor.sline <= vga.draw.cursor.eline && vga.draw.cursor.sline < 16)		// Draw cursor?
+	if (hasFocus && vga.draw.cursor.enabled && vga.draw.cursor.sline <= vga.draw.cursor.eline && vga.draw.cursor.sline < 16)	// Draw cursor?
 		{
 		int newPos = vga.draw.cursor.address>>1;
-		if (newPos >= 0 && newPos < ttf.cols*ttf.lins)										// If on screen
+		if (newPos >= 0 && newPos < ttf.cols*ttf.lins)								// If on screen
 			{
 			int y = newPos/ttf.cols;
 			int x = newPos%ttf.cols;
-/*			I hate a blinking text cursor that much I don't even consider using a "blink=" option in config.txt!
-			Left the code, so it can be enbaled if users ask for it.
-			DWORD testBlink = GetTickCount();
-			if ((!cursorDraw && testBlink >= cursorDrawnAt+500) || (cursorDraw && testBlink >= cursorDrawnAt+1000))
+			if (ttf.cursor != newPos || vga.draw.cursor.sline != prev_sline)		// If new position or shape changed, forse draw
 				{
-				xmin = min(x, xmin);
-				xmax = max(x, xmax);
-				ymin = min(y, ymin);
-				ymax = max(y, ymax);
-				cursorDraw = !cursorDraw;
-				cursorDrawnAt = testBlink;
-				}
-*/
-			if (ttf.cursor != newPos || vga.draw.cursor.sline != prev_sline)				// If new position or shape changed, forse draw
-				{
-//				cursorDraw = true;
-//				cursorDrawnAt = testBlink;
 				prev_sline = vga.draw.cursor.sline;
 				xmin = min(x, xmin);
 				xmax = max(x, xmax);
@@ -397,12 +371,11 @@ else
 				ymax = max(y, ymax);
 				}
 			ttf.cursor = newPos;
-//			if (x >= xmin && x <= xmax && y >= ymin && y <= ymax  && (GetTickCount()&0x400))	// If overdrawn previuosly (or new shape)
-			if (x >= xmin && x <= xmax && y >= ymin && y <= ymax)							// If overdrawn previuosly (or new shape)
+			if (x >= xmin && x <= xmax && y >= ymin && y <= ymax)					// If overdrawn previuosly (or new shape)
 				{
 				Bit8u colorBG = newAttrChar[ttf.cursor]>>12;
 				Bit8u colorFG = (newAttrChar[ttf.cursor]>>8)&15;
-				if (wpVersion > 0)																// If WP and not negative (color value to text attribute excluded)
+				if (wpVersion > 0)													// If WP and not negative (color value to text attribute excluded)
 					{
 					if (colorFG == 0xe && colorBG == 1)
 						{
@@ -433,16 +406,13 @@ else
 				ttf_textRect.y = ttf.offY+y*ttf.height;
 				SDL_BlitSurface(textSurface, &ttf_textClip, sdl.surface, &ttf_textRect);
 				SDL_FreeSurface(textSurface);
-//				if (cursorDraw)
-					{
 				// seccond reverse lower lines
 				textSurface = TTF_RenderUNICODE_Shaded(ttf.SDL_font, unimap, ttf_bgColor, ttf_fgColor);
 				ttf_textClip.y = (ttf.height*vga.draw.cursor.sline)>>4;
-				ttf_textClip.h = ttf.height - ttf_textClip.y;								// for now, cursor to bottom
+				ttf_textClip.h = ttf.height - ttf_textClip.y;						// For now, cursor to bottom
 				ttf_textRect.y = ttf.offY+y*ttf.height + ttf_textClip.y;
 				SDL_BlitSurface(textSurface, &ttf_textClip, sdl.surface, &ttf_textRect);
 				SDL_FreeSurface(textSurface);
-					}
 				}
 			}
 		}
@@ -457,7 +427,7 @@ else
 		ttf_bgColor.b = rgbColors[color].blue;
 		ttf_bgColor.g = rgbColors[color].green;
 		ttf_bgColor.r = rgbColors[color].red;
-		unimap[0] = cpMap[45];										// '-'
+		unimap[0] = cpMap[45];														// '-'
 		unimap[1] = 0;
 		SDL_Surface* textSurface = TTF_RenderUNICODE_Shaded(ttf.SDL_font, unimap, ttf_fgColor, ttf_bgColor);
 		ttf_textClip.w = ttf.width;
@@ -468,54 +438,48 @@ else
 		SDL_BlitSurface(textSurface, &ttf_textClip, sdl.surface, &ttf_textRect);
 		SDL_FreeSurface(textSurface);
 		}
-	if (xmin <= xmax)												// if any changes
+	if (xmin <= xmax)																// If any changes
 		SDL_UpdateRect(sdl.surface, ttf.offX+xmin*ttf.width, ttf.offY+ymin*ttf.height, (xmax-xmin+1)*ttf.width, (ymax-ymin+1)*ttf.height);
 	}
 
 void GFX_EndUpdate(void)
 	{
-	if (!sdl.updating)
-		return;
-	sdl.updating = false;
-
-	if (ttf.inUse)
+	if (vga.mode == M_TEXT)
 		GFX_EndTextLines();
 	else
 		{
-		int pixs = sdl.surface->w/render.cache.width;								// parachute/more safe than sdl.scale???
-		Bit32u *pointer = (Bit32u *)sdl.surface->pixels + (render.cache.start_y*sdl.surface->w + render.cache.start_x)*pixs;
-		Bit8u *cache = rendererCache + render.cache.start_y*render.cache.width + render.cache.start_x;
+		int pixs = sdl.surface->w/render.cache.width;								// Parachute/more safe than sdl.scale???
+		Bit32u *pointer = (Bit32u *)sdl.surface->pixels + (render.cache.start_y*sdl.surface->w)*pixs;
+		Bit8u *cache = rendererCache + render.cache.start_y*render.cache.width;
 
-		for (int i = render.cache.past_y - render.cache.start_y; i; i--)			// build all changed lines
+		for (int i = render.cache.past_y - render.cache.start_y; i; i--)			// Build first to last changed line
 			{
-			Bit32u *cPointer = pointer;
-			Bit8u *cCache = cache;
-			for (int j = render.cache.width-render.cache.start_x; j; j--)			// build one line
+			for (int j = render.cache.width; j; j--)								// Build one line
 				{
-				for (int k = pixs; k; k--)
-					*cPointer++ = ((Bit32u *)render.pal.rgb)[*cCache];
-				cCache++;
+				Bit32u pColor = ((Bit32u *)render.pal.rgb)[*cache++];
+				int k = pixs;
+				do
+					*pointer++ = pColor;
+				while (--k);
 				}
-			pointer += sdl.surface->w;
-			for (int j = pixs-1; j; j--)											// duplicate line pixs
+			for (int j = pixs-1; j; j--)											// Duplicate line pixs
 				{
-				wmemcpy((wchar_t*)pointer, (wchar_t*)(pointer-sdl.surface->w), (render.cache.width-render.cache.start_x)*pixs*2);
+				memcpy(pointer, pointer-sdl.surface->w, render.cache.width*pixs*4);
 				pointer += sdl.surface->w;
 				}
-			cache += render.cache.width;
 			}
-		SDL_UpdateRect(sdl.surface, render.cache.start_x*pixs, render.cache.start_y*pixs, (render.cache.past_x-render.cache.start_x)*pixs, (render.cache.past_y - render.cache.start_y)*pixs);
+		SDL_UpdateRect(sdl.surface, 0, render.cache.start_y*pixs, render.cache.width*pixs, (render.cache.past_y - render.cache.start_y)*pixs);
 		}
 	}
 
 static void decreaseFontSize()
 	{
-	if (ttf.inUse && ttf.pointsize > 12)
+	if (vga.mode == M_TEXT && ttf.pointsize > 12)
 		{
 		GFX_SelectFontByPoints(ttf.pointsize - (ttf.vDos ? 2 : 1));
-		GFX_SetSize(720, 400);
-		wmemset((wchar_t*)curAttrChar, -1, ttf.cols*ttf.lins);
-		if (ttf.fullScrn)																// smaller content area leaves old one behind
+		GFX_SetSize();
+		memset(curAttrChar, -1, ttf.cols*ttf.lins*2);								// Force redraw of complete window
+		if (ttf.fullScrn)															// Smaller content area leaves old one behind
 			{
 			SDL_FillRect(sdl.surface, NULL, 0);
 			SDL_UpdateRect(sdl.surface, 0, 0, 0, 0);
@@ -526,20 +490,20 @@ static void decreaseFontSize()
 
 static void increaseFontSize()
 	{
-	if (ttf.inUse)																		// increase fontsize
+	if (vga.mode == M_TEXT)															// Increase fontsize
 		{
 		int maxWidth = GetSystemMetrics(SM_CXSCREEN);
 		int maxHeight = GetSystemMetrics(SM_CYSCREEN);
-		if (!ttf.fullScrn && winFramed)													// 3D borders
+		if (!ttf.fullScrn && winFramed)												// 3D borders
 			{
 			maxWidth -= GetSystemMetrics(SM_CXBORDER)*2;
 			maxHeight -= GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYBORDER)*2;
 			}
 		GFX_SelectFontByPoints(ttf.pointsize + (ttf.vDos ? 2 : 1));
-		if (ttf.cols*ttf.width <= maxWidth && ttf.lins*ttf.height <= maxHeight)			// if it fits on screen
+		if (ttf.cols*ttf.width <= maxWidth && ttf.lins*ttf.height <= maxHeight)		// if it fits on screen
 			{
-			GFX_SetSize(720, 400);
-			wmemset((wchar_t*)curAttrChar, -1, ttf.cols*ttf.lins);						// force redraw of complete window
+			GFX_SetSize();
+			memset(curAttrChar, -1, ttf.cols*ttf.lins*2);							// Force redraw of complete window
 			GFX_EndTextLines();
 			}
 		else
@@ -547,16 +511,16 @@ static void increaseFontSize()
 		}
 	}
 
-void readTTF(const char *fName)												// Open and read alternative font
+void readTTF(const char *fName)														// Open and read alternative font
 	{
 	FILE * ttf_fh;
 	char ttfPath[1024];
 
-	strcpy(ttfPath, fName);													// Try to load it from working directory
+	strcpy(ttfPath, fName);															// Try to load it from working directory
 	strcat(ttfPath, ".ttf");
 	if (!(ttf_fh  = fopen(ttfPath, "rb")))
 		{
-		strcpy(strrchr(strcpy(ttfPath, _pgmptr), '\\')+1, fName);			// Try to load it from where vDos was started
+		strcpy(strrchr(strcpy(ttfPath, _pgmptr), '\\')+1, fName);					// Try to load it from where vDos was started
 		strcat(ttfPath, ".ttf");
 		ttf_fh  = fopen(ttfPath, "rb");
 		}
@@ -573,16 +537,16 @@ void readTTF(const char *fName)												// Open and read alternative font
 							}
 		fclose(ttf_fh);
 		}
-	E_Exit("Could not load font file: %s.ttf", fName);
+	ConfAddError("Could not load TTF font file\n", (char *)fName);
 	}
 
 static LRESULT CALLBACK SysMenuExtendWndProc(HWND hwnd, UINT uiMsg, WPARAM wparam, LPARAM lparam)
 	{
 	if (uiMsg  == WM_SYSCOMMAND)
 		{
-		if (aboutShown || selectingText)									// selectingText can't be set at this time, but...
+		if (aboutShown || selectingText)											// Selecting text can't be set at this time, but...
 			{
-			SDL_UpdateRect(sdl.surface, 0, 0, 0, 0);						// Too much and not always needed, so?
+			SDL_UpdateRect(sdl.surface, 0, 0, 0, 0);								// Too much and not always needed, so?
 			aboutShown = false;
 			selectingText = false;
 			}
@@ -607,7 +571,6 @@ static LRESULT CALLBACK SysMenuExtendWndProc(HWND hwnd, UINT uiMsg, WPARAM wpara
 			Rectangle(hDC, rect.left, rect.top, rect.right, rect.bottom);
 			DeleteObject(hPen);
 			DeleteObject(hBrush);
-//			DrawIcon(hDC, rect.left-16, rect.top-16, LoadIcon(GetModuleHandle(NULL), "vDos_ico")); 
 
 			rect.top += 32;
 			HFONT hFont = CreateFont(20, 0, 0, 0, FW_NORMAL, false, false, false, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH, "Arial");
@@ -638,6 +601,27 @@ static LRESULT CALLBACK SysMenuExtendWndProc(HWND hwnd, UINT uiMsg, WPARAM wpara
 	return CallWindowProc(fnSDLDefaultWndProc, hwnd, uiMsg, wparam, lparam);
 	}
 
+bool getWP(char * wpStr)
+	{
+	if (!strnicmp(wpStr, "WS", 2))													// WP = WS (WordStar)
+		{
+		wpStr += 2;
+		wsVersion = 1;
+		lTrim(wpStr);
+		if (*wpStr == 0)
+			return true;
+		if (sscanf(wpStr, ", %d", &wsBackGround) == 1)
+			if (wsBackGround >= 0 && wsBackGround <= 15)
+				return true;
+		wsBackGround = 0;
+		wsVersion = 0;
+		return false;
+		}
+	if (sscanf(wpStr, "%d", &wpVersion) == 1)										// No checking on version number
+		return true;
+	return false;
+
+	}
 
 bool setColors(const char *colorArray)
 	{
@@ -684,20 +668,20 @@ bool setColors(const char *colorArray)
 
 
 bool setWinInitial(const char *winDef)
-	{																						// Format = <max perc>[,x-pos:y-pos]
-	if (!*winDef)																			// Nothing set
+	{																				// Format = <max perc>[,x-pos:y-pos]
+	if (!*winDef)																	// Nothing set
 		return true;
 	int testVal1, testVal2, testVal3;
 	char testStr[512];
-	if (sscanf(winDef, "%d%s", &testVal1, testStr) == 1)									// Only <max perc>
-		if (testVal1 > 0 && testVal1 <= 100)												// 1/100% are absolute minimum/maximum
+	if (sscanf(winDef, "%d%s", &testVal1, testStr) == 1)							// Only <max perc>
+		if (testVal1 > 0 && testVal1 <= 100)										// 1/100% are absolute minimum/maximum
 			{
 			winPerc = testVal1;
 			return true;
 			}
-	if (sscanf(winDef, "%d,%d:%d%s", &testVal1, &testVal2, &testVal3, testStr) == 3)		// All parameters
-		if (testVal1 > 0 && testVal1 <= 100 && testVal2 >= 0 && testVal3 >= 0)				// x-and y-pos only tested for positive values
-			{																				// values too high are checked later and eventually dropped
+	if (sscanf(winDef, "%d,%d:%d%s", &testVal1, &testVal2, &testVal3, testStr) == 3)	// All parameters
+		if (testVal1 > 0 && testVal1 <= 100 && testVal2 >= 0 && testVal3 >= 0)		// X-and y-pos only tested for positive values
+			{																		// Values too high are checked later and eventually dropped
 			winPerc = testVal1;
 			initialX = testVal2;
 			initialY = testVal3;
@@ -708,54 +692,78 @@ bool setWinInitial(const char *winDef)
 
 void GUI_StartUp()
 	{
+	STARTUPINFO si;
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	GetStartupInfo(&si);
 	SDL_WM_SetCaption("vDos", "vDos");
+	char *caption = (char*)tempBuff32K;
+	strcpy(caption, si.lpTitle);
+	if (caption = strrchr(caption, '\\'))
+		{
+		if (char *p = strrchr(caption, '.'))
+			*p = 0;
+		SDL_WM_SetCaption(caption+1, caption+1);
+		}
 	SDL_SysWMinfo wminfo;
 	SDL_VERSION(&wminfo.version);
 	SDL_GetWMInfo(&wminfo);
 	sdlHwnd = wminfo.window;
 
-	SetClassLong(sdlHwnd, GCL_HICON, (LONG)LoadIcon(GetModuleHandle(NULL), "vDos_ico"));	// set vDos (SDL) icon
-	const char * fName = ConfGetString("font");
+	SetClassLong(sdlHwnd, GCL_HICON, (LONG)LoadIcon(GetModuleHandle(NULL), "vDos_ico"));	// Set vDos (SDL) icon
+	char * fName = ConfGetString("font");
+	if (*fName == '-')																// (Preceeding) - indicates ASCII 176-223 = lines
+		{
+		fontBoxed = true;
+		fName = lTrim(fName+1);
+		}
 	if (*fName)
 		readTTF(fName);
 	else
 		ttf.vDos = true;;
 
-	ttf.lins =ConfGetInt("lins");
+	ttf.lins = ConfGetInt("lins");
 	ttf.lins = max(24, min(txtMaxLins, ttf.lins));
 	ttf.cols = ConfGetInt("cols");
 	ttf.cols = max(80, min(txtMaxCols, ttf.cols));
-	for (Bitu i = 0; ModeList_VGA[i].mode != 0xffff; i++)										// set the cols and lins in video mode 3
-		if (ModeList_VGA[i].mode == 3 || (ModeList_VGA[i].mode == 7))
-			{
-			ModeList_VGA[i].twidth = ttf.cols;
-			ModeList_VGA[i].theight = ttf.lins;
-			break;
-			}
+	for (Bitu i = 0; ModeList_VGA[i].mode <= 7; i++)								// Set the cols and lins in video mode 2,3,7
+		{
+		ModeList_VGA[i].twidth = ttf.cols;
+		ModeList_VGA[i].theight = ttf.lins;
+		}
 
-	int hide10th = ConfGetInt("hide");															// hide window for a while (10ths of a second)
-//	hideWinTill = GetTickCount64();																// Only supported by Vista and up
-	hideWinTill = GetTickCount();
-	if (hide10th > 0)
-		hideWinTill += hide10th*100;
 	usesMouse = ConfGetBool("mouse");
-	wpVersion = ConfGetInt("wp");																// If negative, exclude some WP stuff in the future
+//	wpVersion = ConfGetInt("wp");													// If negative, exclude some WP stuff in the future
 	winFramed = ConfGetBool("frame");
 	sdl.scale = ConfGetInt("scale");
-	char * colors = ConfGetString("colors");
-	// Next 3 lines temporary added to lock DOS colors in text mode
-	setColors("#000000 #0000aa #00aa00 #00aaaa #aa0000 #aa00aa #aa5500 #aaaaaa #555555 #5555ff #55ff55 #55ffff #ff5555 #ff55ff #ffff55 #ffffff");	// Standard DOS colors
+	char *wpStr = ConfGetString("WP");
+	if (*wpStr)
+		if (!getWP(wpStr))
+			ConfAddError("Invalid WP= parameters\n", wpStr);
 	rgbColors = altBGR1;
-	colorsLocked = true;
-	if (*colors)
+	char * colors = ConfGetString("colors");
+	if (!strnicmp(colors, "mono", 4))												// Mono, "Hercules" mode?
 		{
-		if (setColors(colors))
+		colors += 4;
+		lTrim(colors);
+		if (*colors == ',' || *colors == 0)
 			{
-			rgbColors = altBGR1;
-			colorsLocked = true;
+			initialvMode = 7;
+			if (*colors == ',')
+				{
+				colors += 1;
+				lTrim(colors);
+				}
 			}
-		else
+		}
+	if (!setColors(colors))
+		{
+		setColors("#000000 #0000aa #00aa00 #00aaaa #aa0000 #aa00aa #aa5500 #aaaaaa #555555 #5555ff #55ff55 #55ffff #ff5555 #ff55ff #ffff55 #ffffff");	// Standard DOS colors
+		if (*colors)
+			{
+			initialvMode = 3;
 			ConfAddError("Invalid COLORS= parameters\n", colors);
+			}
 		}
 	char * winDef = ConfGetString("window");
 	if (!setWinInitial(winDef))
@@ -765,50 +773,49 @@ void GUI_StartUp()
 
 	int maxWidth = GetSystemMetrics(SM_CXSCREEN);
 	int maxHeight = GetSystemMetrics(SM_CYSCREEN);
-	if (!ttf.fullScrn && winFramed)																// 3D borders
+	if (!ttf.fullScrn && winFramed)													// 3D borders
 		{
 		maxWidth -= GetSystemMetrics(SM_CXBORDER)*2;
 		maxHeight -= GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYBORDER)*2;
 		}
 
-	if (sdl.scale < 1 || sdl.scale > 9)						// 0 = probably not in config.txt, max = 9
+	if (sdl.scale < 1 || sdl.scale > 9)												// 0 = probably not in config.txt, max = 9
 		{
-		sdl.scale = 1;										// parachute to 1
-		sdl.scale = min(maxWidth/640, maxHeight/480);		// based on max resolution supported VGA modes
-		if (sdl.scale < 1)									// probably overkill
+		sdl.scale = 1;																// Parachute to 1
+		sdl.scale = min(maxWidth/640, maxHeight/480);								// Based on max resolution supported VGA modes
+		if (sdl.scale < 1)															// Probably overkill
 			sdl.scale = 1;
 		if (sdl.scale > 9)
 			sdl.scale = 9;
 		}
 
-	int	curSize = 30;																			// no clear idea what would be a good starting value
+	int	curSize = 30;																// No clear idea what would be a good starting value
 	int lastGood = -1;
 	int trapLoop = 0;
 
 	while (curSize != lastGood)
 		{
 		GFX_SelectFontByPoints(curSize);
-		if (ttf.cols*ttf.width <= maxWidth && ttf.lins*ttf.height <= maxHeight)					// if it fits on screen
+		if (ttf.cols*ttf.width <= maxWidth && ttf.lins*ttf.height <= maxHeight)		// If it fits on screen
 			{
 			lastGood = curSize;
 			float coveredPerc = float(100*ttf.cols*ttf.width/maxWidth*ttf.lins*ttf.height/maxHeight);
-			if (trapLoop++ > 4 && coveredPerc <= winPerc)										// we can get into a +/-/+/-... loop!
+			if (trapLoop++ > 4 && coveredPerc <= winPerc)							// We can get into a +/-/+/-... loop!
 				break;
-			curSize = (int)(curSize*sqrt((float)winPerc/coveredPerc));							// rounding down is ok
-			if (curSize < 12)																	// minimum size = 12
+			curSize = (int)(curSize*sqrt((float)winPerc/coveredPerc));				// Rounding down is ok
+			if (curSize < 12)														// Minimum size = 12
 				curSize = 12;
 			}
-		else if (--curSize < 12)																// silly, but OK, one never can tell..
+		else if (--curSize < 12)													// Silly, but OK, youy never know..
 			E_Exit("Cannot accommodate a window for %dx%d", ttf.lins, ttf.cols);
 		}
-	if (ttf.vDos)																				// make it even for vDos internal font (a bit nicer)
+	if (ttf.vDos)																	// Make it even for vDos internal font (a bit nicer)
 		curSize &= ~1;
 
 	GFX_SelectFontByPoints(curSize);
 	HMENU hSysMenu = GetSystemMenu(sdlHwnd, FALSE);
-//	while (RemoveMenu(hSysMenu, 0, MF_BYPOSITION))
-//		;
-	RemoveMenu(hSysMenu, SC_MAXIMIZE, MF_BYCOMMAND);											// remove some useless items
+
+	RemoveMenu(hSysMenu, SC_MAXIMIZE, MF_BYCOMMAND);								// Remove some useless items
 	RemoveMenu(hSysMenu, SC_SIZE, MF_BYCOMMAND);
 	RemoveMenu(hSysMenu, SC_RESTORE, MF_BYCOMMAND);
 
@@ -828,7 +835,6 @@ void GUI_StartUp()
 
 static Bit16u deadKey = 0;
 static int winMoving = 0;
-static bool firstMouseMove = true;
 
 
 void GFX_Events()
@@ -836,31 +842,28 @@ void GFX_Events()
 	SDL_Event event;
 	while (SDL_PollEvent(&event))
 		{
-		if (ttf.inUse && !winFramed)
+		if (!newAttrChar)															// First message is SDL_MOUSEMOTION w/o newAttrChar being initialized
+			return;
+		if (vga.mode == M_TEXT && !winFramed)
 			if (GetFocus() != sdlHwnd)
 				{
 				if (hasFocus)
 					{
 					hasFocus = false;
-					wmemset((wchar_t*)curAttrChar, -1, ttf.cols);				// force redraw of top line
+					memset(curAttrChar, -1, ttf.cols*2);							// Force redraw of top line
 					GFX_EndTextLines();
 					}
 				}
 			else if (!hasFocus)
 				{
 				hasFocus = true;
-				wmemset((wchar_t*)curAttrChar, -1, ttf.cols);					// force redraw of top line
+				memset(curAttrChar, -1, ttf.cols*2);								// Force redraw of top line
 				GFX_EndTextLines();
 				}
 
 		switch (event.type)
 			{
 		case SDL_MOUSEMOTION:
-			if (firstMouseMove)
-				{
-				firstMouseMove = false;
-				break;
-				}
 			if (selectingText)
 				{
 				RECT selBox1 = {selPosX1*ttf.width, selPosY1*ttf.height, selPosX2*ttf.width+ttf.width, selPosY2*ttf.height+ttf.height};
@@ -871,7 +874,7 @@ void GFX_Events()
 				selPosY1 = min(selStartY, newY);
 				selPosY2 = max(selStartY, newY);
 				RECT selBox2 = {selPosX1*ttf.width, selPosY1*ttf.height, selPosX2*ttf.width+ttf.width, selPosY2*ttf.height+ttf.height};
-				if (memcmp(&selBox1, &selBox2, sizeof(RECT)))				// update selected block if needed
+				if (memcmp(&selBox1, &selBox2, sizeof(RECT)))						// Update selected block if needed
 					{
 					HDC hDC = GetDC(sdlHwnd);
 					InvertRect(hDC, &selBox1);
@@ -880,16 +883,16 @@ void GFX_Events()
 					}
 				return;
 				}
-			if (ttf.inUse && !hasFocus)
+			if (vga.mode == M_TEXT && !hasFocus)
 				break;
-			if (ttf.inUse && !winMoving && !winFramed)
+			if (vga.mode == M_TEXT && !winMoving && !winFramed)
 				if ((!ttf.fullScrn && (event.motion.y < ttf.offY+ttf.height) != hasMinButton))
 					{
 					hasMinButton = !hasMinButton;
 					curAttrChar[ttf.cols-1] = newAttrChar[ttf.cols-1]^0xffff;
 					GFX_EndTextLines();
 					}
-			if (winMoving && ((winMoving++)&1))				// Moving the window generates a second SDL_MOUSEMOTION, just ignore that one
+			if (winMoving && ((winMoving++)&1))										// Moving the window generates a second SDL_MOUSEMOTION, just ignore that one
 				{
 				RECT SDLRect;
 				GetWindowRect(sdlHwnd, &SDLRect);
@@ -897,9 +900,18 @@ void GFX_Events()
 				MoveWindow(sdlHwnd, SDLRect.left+event.motion.xrel, SDLRect.top+event.motion.yrel, SDLRect.right - SDLRect.left, SDLRect.bottom - SDLRect.top, TRUE);
 				break;
 				}
-			if (ttf.inUse && usesMouse)
+			if (vga.mode == M_TEXT && usesMouse)
+				{
+				if (ttf.fullScrn)
+					{
+					event.motion.x -= fullLeftOff;
+					event.motion.y -= fullTopOff;
+					if (event.motion.x < 0 || event.motion.x >= sdl.width || event.motion.y < 0 || event.motion.y >= sdl.height)
+						break;
+					}
 				Mouse_CursorMoved(event.motion.x, event.motion.y, ttf.width, ttf.height);
-			else if (!ttf.inUse)
+				}
+			else if (vga.mode != M_TEXT)
 				Mouse_CursorMoved(event.motion.x, event.motion.y, sdl.scale, sdl.scale);
 			break;
 		case SDL_MOUSEBUTTONDOWN:
@@ -907,13 +919,13 @@ void GFX_Events()
 			{
 			if (aboutShown)
 				{
-				SDL_UpdateRect(sdl.surface, 0, 0, 0, 0);					// Too much and not always needed, so?
+				SDL_UpdateRect(sdl.surface, 0, 0, 0, 0);							// Too much and not always needed, so?
 				aboutShown = false;
 				}
-			if (selectingText)												// End selecting text
+			if (selectingText)														// End selecting text
 				{
-				SDL_UpdateRect(sdl.surface, 0, 0, 0, 0);					// To restore the window
-				SDL_WM_GrabInput(SDL_GRAB_OFF);								// Free mouse
+				SDL_UpdateRect(sdl.surface, 0, 0, 0, 0);							// To restore the window
+				SDL_WM_GrabInput(SDL_GRAB_OFF);										// Free mouse
 				if (OpenClipboard(NULL))
 					{
 					if (EmptyClipboard())
@@ -935,7 +947,7 @@ void GFX_Events()
 										lastNotSpace = dataIdx;
 									}
 								dataIdx = lastNotSpace;
-								if (line != selPosY2)							// Append line feed for all bur the last line 
+								if (line != selPosY2)								// Append line feed for all bur the last line 
 									{
 									pChData[dataIdx++] = 0x0d;
 									pChData[dataIdx++] = 0x0a;
@@ -954,7 +966,7 @@ void GFX_Events()
 				return;
 				}
 			// [Win][Ctrl+Left mouse button starts block select for clipboard copy
-			if (ttf.inUse && !ttf.fullScrn && event.button.state == SDL_PRESSED && ((GetKeyState(VK_LCONTROL)&0x80) || (GetKeyState(VK_RCONTROL)&0x80)) && ((GetKeyState(VK_LWIN)&0x80) || (GetKeyState(VK_RWIN)&0x80)))
+			if (vga.mode == M_TEXT && !ttf.fullScrn && event.button.state == SDL_PRESSED && ((GetKeyState(VK_LCONTROL)&0x80) || (GetKeyState(VK_RCONTROL)&0x80)) && ((GetKeyState(VK_LWIN)&0x80) || (GetKeyState(VK_RWIN)&0x80)))
 				{
 				selStartX = selPosX1 = selPosX2 = event.button.x/ttf.width;
 				selStartY = selPosY1 = selPosY2 = event.button.y/ttf.height;
@@ -962,12 +974,12 @@ void GFX_Events()
 				HDC hDC = GetDC(sdlHwnd);
 				InvertRect(hDC, &selBox);
 				ReleaseDC(sdlHwnd, hDC);
-				SDL_WM_GrabInput(SDL_GRAB_ON);								// Restrict mouse to window
+				SDL_WM_GrabInput(SDL_GRAB_ON);										// Restrict mouse to window
 				selectingText = true;
 				return;
 				}
 			winMoving = 0;
-			if (!winFramed && !ttf.fullScrn && ttf.inUse && event.button.button == 1 && event.button.state == SDL_PRESSED)	//Minimize?
+			if (!winFramed && !ttf.fullScrn && vga.mode == M_TEXT && event.button.button == 1 && event.button.state == SDL_PRESSED)	//Minimize?
 				if (event.button.y < ttf.offY+ttf.height)
 					{
 					if (event.button.y <= ttf.offY+ttf.height/2 && event.button.x >= ttf.offX+sdl.width-ttf.width)
@@ -979,6 +991,13 @@ void GFX_Events()
 					}
 			if (usesMouse && (event.button.button == SDL_BUTTON_LEFT || event.button.button == SDL_BUTTON_RIGHT))
 				{
+				if (ttf.fullScrn)
+					{
+					event.button.x -= fullLeftOff;
+					event.button.y -= fullTopOff;
+					if (event.button.x < 0 || event.button.x >= sdl.width || event.button.y < 0 || event.button.y >= sdl.height)
+						break;
+					}
 				if (event.button.state == SDL_PRESSED)
 					Mouse_ButtonPressed(event.button.button>>1);
 				else
@@ -990,7 +1009,7 @@ void GFX_Events()
 			{
 			for (Bit8u handle = 0; handle < DOS_FILES; handle++)
 				if (Files[handle])
-					if ((Files[handle]->GetInformation() & 0x8000) == 0)				// If not device
+					if ((Files[handle]->GetInformation() & 0x8000) == 0)			// If not device
 						{
 						MessageBox(sdlHwnd, MSG_Get("UNSAFETOCLOSE2"), MSG_Get("UNSAFETOCLOSE1"), MB_OK | MB_ICONWARNING);
 						return;
@@ -1006,46 +1025,48 @@ void GFX_Events()
 		case SDL_KEYUP:
 			if (aboutShown)
 				{
-				SDL_UpdateRect(sdl.surface, 0, 0, 0, 0);					// Too much and not always needed, so?
+				SDL_UpdateRect(sdl.surface, 0, 0, 0, 0);							// Too much and not always needed, so?
 				aboutShown = false;
 				}
 			// [Alt][Enter] siwtches from window to "fullscreen" (should we block these keys and releasing them going to DOS?)
 		    if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == 28 && ((event.key.keysym.mod&KMOD_LALT) || (event.key.keysym.mod&KMOD_RALT)))
 				{
+				if (CurMode->type == M_EGA)
+					return;
 				ttf.fullScrn = !ttf.fullScrn;
 				if (ttf.fullScrn)
 					{
-					if (GetWindowRect(sdlHwnd, &prevPosition))							// save position and point size
+					if (GetWindowRect(sdlHwnd, &prevPosition))						// Save position and point size
 						prevPointSize = ttf.pointsize;
-					int maxWidth = GetSystemMetrics(SM_CXSCREEN);						// switching to fullscreen should get the maximum sized content
+					int maxWidth = GetSystemMetrics(SM_CXSCREEN);					// Switching to fullscreen should get the maximum sized content
 					int maxHeight = GetSystemMetrics(SM_CYSCREEN);
-					while (ttf.cols*ttf.width <= maxWidth && ttf.lins*ttf.height <= maxHeight)	// very lazy method indeed
+					while (ttf.cols*ttf.width <= maxWidth && ttf.lins*ttf.height <= maxHeight)	// Very lazy method indeed
 						GFX_SelectFontByPoints(ttf.pointsize + (ttf.vDos ? 2 : 1));
 					GFX_SelectFontByPoints(ttf.pointsize - (ttf.vDos ? 2 : 1));
-					ttf.offX = (GetSystemMetrics(SM_CXSCREEN)-ttf.width*ttf.cols)/2;	// content gets centered
+					ttf.offX = (GetSystemMetrics(SM_CXSCREEN)-ttf.width*ttf.cols)/2;	// Content gets centered
 					ttf.offY = (GetSystemMetrics(SM_CYSCREEN)-ttf.height*ttf.lins)/2;
 					}
 				else
 					{
 					ttf.offX = ttf.offY = 0;
-					if (prevPointSize)													// switching back to windowed mode
+					if (prevPointSize)												// Switching back to windowed mode
 						{
 						if (ttf.pointsize != prevPointSize)
 							GFX_SelectFontByPoints(prevPointSize);
 						}
-					else if (winFramed)													// First switch to window mode with frame and maximized font size could give a too big window
+					else if (winFramed)												// First switch to window mode with frame and maximized font size could give a too big window
 						{
 						int maxWidth = GetSystemMetrics(SM_CXSCREEN) - GetSystemMetrics(SM_CXBORDER)*2;
 						int maxHeight = GetSystemMetrics(SM_CYSCREEN) - GetSystemMetrics(SM_CYCAPTION) - GetSystemMetrics(SM_CYBORDER)*2;
-						if (ttf.cols*ttf.width > maxWidth || ttf.lins*ttf.height > maxHeight)	// if it doesn't fits on screen
-							GFX_SelectFontByPoints(ttf.pointsize - (ttf.vDos ? 2 : 1));	// Should do the trick
+						if (ttf.cols*ttf.width > maxWidth || ttf.lins*ttf.height > maxHeight)	// If it doesn't fits on screen
+							GFX_SelectFontByPoints(ttf.pointsize - (ttf.vDos ? 2 : 1));			// Should do the trick
 						}
 					}
-				GFX_SetSize(720, 400);
+				GFX_SetSize();
 				TimedSetSize();
 				if (!ttf.fullScrn && prevPointSize)
 					MoveWindow(sdlHwnd, prevPosition.left, prevPosition.top, prevPosition.right-prevPosition.left, prevPosition.bottom-prevPosition.top, false);
-				wmemset((wchar_t*)curAttrChar, -1, ttf.cols*ttf.lins);
+				memset(curAttrChar, -1, ttf.cols*ttf.lins*2);
 				GFX_EndTextLines();
 				return;
 				}
@@ -1064,7 +1085,7 @@ void GFX_Events()
 				return;
 				}
 			if (event.type == SDL_KEYUP && event.key.keysym.scancode == 0 && event.key.keysym.sym == 306)
-				event.key.keysym.scancode = 29;						// need to repair this after intercepting the 'C' of [Win][Ctr]+C
+				event.key.keysym.scancode = 29;										// Need to repair this after intercepting the 'C' of [Win][Ctr]+C
 
 			// [Win][Ctrl]+V pastes clipboard into keyboard buffer
 			if (event.type == SDL_KEYDOWN && event.key.keysym.scancode == 47 && (event.key.keysym.mod&KMOD_CTRL) &&((GetKeyState(VK_LWIN)&0x80) || (GetKeyState(VK_RWIN)&0x80)))
@@ -1080,28 +1101,29 @@ void GFX_Events()
 				}
 
  			// Pointsize modifiers, we can't use some <Shift>/<Ctrl> combination, SDL_SetVideoMode() messes up SDL keyboard!
-			if (event.key.keysym.scancode == 88 && ((GetKeyState(VK_LWIN)&0x80) || (GetKeyState(VK_RWIN)&0x80)))	// intercept <Win><Ctrl>F12
+			if (event.key.keysym.scancode == 88 && ((GetKeyState(VK_LWIN)&0x80) || (GetKeyState(VK_RWIN)&0x80)))	// Intercept <Win>F12
 				{
-				if (event.type == SDL_KEYDOWN && !ttf.fullScrn)							// increase fontsize
+				if (event.type == SDL_KEYDOWN && !ttf.fullScrn)						// Increase fontsize
 					increaseFontSize();
 				return;
 				}
-			if (event.key.keysym.scancode == 87 && ((GetKeyState(VK_LWIN)&0x80) || (GetKeyState(VK_RWIN)&0x80)))	// intercept <Win><Ctrl>F11
+			if (event.key.keysym.scancode == 87 && ((GetKeyState(VK_LWIN)&0x80) || (GetKeyState(VK_RWIN)&0x80)))	// Intercept <Win>F11
 				{
-				if (event.type == SDL_KEYDOWN && !ttf.fullScrn)							// Decrease fontsize
+				if (event.type == SDL_KEYDOWN && !ttf.fullScrn)						// Decrease fontsize
 					decreaseFontSize();
 				return;
 				}
 
-			if (event.key.keysym.mod&3)													// shifted dead keys reported as unshifted
-				if (event.key.keysym.sym == 39)											// '=> "
+			if (event.key.keysym.mod&3)												// Shifted dead keys reported as unshifted
+				if (event.key.keysym.sym == 39)										// '=> "
 					event.key.keysym.sym = (SDLKey)34;
-				else if (event.key.keysym.sym == 96)									// ` => ~
+				else if (event.key.keysym.sym == 96)								// ` => ~
 					event.key.keysym.sym = (SDLKey)126;
-				else if (event.key.keysym.sym == 54)									// 6 => ^
+				else if (event.key.keysym.sym == 54)								// 6 => ^
 					event.key.keysym.sym = (SDLKey)94;
 
 			if (!deadKey && event.type == SDL_KEYDOWN && event.key.keysym.unicode == 0)
+//			if (!deadKey && event.type == SDL_KEYDOWN)
 				if (event.key.keysym.sym == SDLK_QUOTE || event.key.keysym.sym == SDLK_QUOTEDBL || event.key.keysym.sym == SDLK_BACKQUOTE || event.key.keysym.sym == 126 || event.key.keysym.sym == SDLK_CARET)
 					{
 					deadKey = event.key.keysym.sym;
@@ -1121,7 +1143,7 @@ void GFX_Events()
 								return;
 								}
 					BIOS_AddKeyToBuffer(deadKey);
-					if (event.key.keysym.sym != 32)											// If not space, add character
+					if (event.key.keysym.sym != 32)									// If not space, add character
 						{
 						int correct = 0;
 						if (event.key.keysym.sym >= 'a' && event.key.keysym.sym <= 'z')		// Shift reported as unshifted, CAPS not handled
@@ -1140,8 +1162,8 @@ void GFX_Events()
 			if (deadKey && event.type == SDL_KEYUP && event.key.keysym.sym == deadKey)
 				return;
 			if (event.key.keysym.sym >= SDLK_KP0 && event.key.keysym.sym <= SDLK_KP9 && event.key.keysym.mod&(KMOD_LSHIF|KMOD_RSHIFT) && !(event.key.keysym.mod&SDLK_NUMLOCK))
-				event.key.keysym.unicode = event.key.keysym.sym - SDLK_KP0 + 48;			// why aren't these reported as Unicode?
-			BIOS_AddKey(event.key.keysym.scancode, event.key.keysym.unicode, event.type == SDL_KEYDOWN);
+				event.key.keysym.unicode = event.key.keysym.sym - SDLK_KP0 + 48;	// Why aren't these reported as Unicode?
+			BIOS_AddKey(event.key.keysym.scancode, event.key.keysym.unicode, event.key.keysym.sym, event.type == SDL_KEYDOWN);
 			break;
 			}
 		}
@@ -1173,9 +1195,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		{
 		MSG_Init();
 
-		if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE))		// Init SDL
+		if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE))						// Init SDL
 			E_Exit("Could't init SDL, %s", SDL_GetError());
-		if (TTF_Init())												// Init SDL-TTF
+		if (TTF_Init())																// Init SDL-TTF
 			E_Exit("Could't init SDL-TTF, %s", SDL_GetError());
 
 		SDL_putenv("SDL_VIDEO_CENTERED=center");

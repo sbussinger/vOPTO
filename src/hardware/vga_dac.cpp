@@ -119,29 +119,11 @@ static void write_p3c9(Bitu port, Bitu val, Bitu iolen)
 		break;
 	case 2:
 		vga.dac.rgb[vga.dac.write_index].blue = val;
-		switch (vga.mode)
-			{
-		case M_VGA:
-			VGA_DAC_UpdateColor(vga.dac.write_index);
-			if (vga.dac.pel_mask != 0xff)
-				{
-				Bitu index = vga.dac.write_index;
-				if ((index & vga.dac.pel_mask) == index )
-					{
-					for (Bitu i = index+1; i < 256; i++) 
-						if ((i & vga.dac.pel_mask) == index)
-							VGA_DAC_UpdateColor(i);
-					}
-				} 
-			break;
-		default:
-			// Check for attributes and DAC entry link
-			for (Bitu i = 0; i < 16; i++)
-				if (vga.dac.combine[i] == vga.dac.write_index)
-					VGA_DAC_SendColor(i, vga.dac.write_index);
-			}
+		// Check for attributes and DAC entry link
+		for (Bitu i = 0; i < 16; i++)
+			if (vga.dac.combine[i] == vga.dac.write_index)
+				VGA_DAC_SendColor(i, vga.dac.write_index);
 		vga.dac.write_index++;
-//		vga.dac.read_index = vga.dac.write_index - 1;//disabled as it breaks Wari
 		vga.dac.pel_index = 0;
 		break;
 		}
@@ -176,10 +158,8 @@ static Bitu read_p3c9(Bitu port, Bitu iolen)
 
 void VGA_DAC_CombineColor(Bit8u attr, Bit8u pal)
 	{
-	// Check if this is a new color
 	vga.dac.combine[attr] = pal;
-	if (vga.mode != M_VGA)
-		VGA_DAC_SendColor(attr, pal);
+	VGA_DAC_SendColor(attr, pal);
 	}
 
 void VGA_SetupDAC(void)
@@ -193,12 +173,12 @@ void VGA_SetupDAC(void)
 	vga.dac.reg02 = 0;
 
 	// Setup the DAC IO port Handlers
-	IO_RegisterWriteHandler(0x3c6, write_p3c6, IO_MB);
-	IO_RegisterReadHandler(0x3c6, read_p3c6, IO_MB);
-	IO_RegisterWriteHandler(0x3c7, write_p3c7, IO_MB);
-	IO_RegisterReadHandler(0x3c7, read_p3c7, IO_MB);
-	IO_RegisterWriteHandler(0x3c8, write_p3c8, IO_MB);
-	IO_RegisterReadHandler(0x3c8, read_p3c8, IO_MB);
-	IO_RegisterWriteHandler(0x3c9, write_p3c9, IO_MB);
-	IO_RegisterReadHandler(0x3c9, read_p3c9, IO_MB);
+	IO_RegisterWriteHandler(0x3c6, write_p3c6);
+	IO_RegisterReadHandler(0x3c6, read_p3c6);
+	IO_RegisterWriteHandler(0x3c7, write_p3c7);
+	IO_RegisterReadHandler(0x3c7, read_p3c7);
+	IO_RegisterWriteHandler(0x3c8, write_p3c8);
+	IO_RegisterReadHandler(0x3c8, read_p3c8);
+	IO_RegisterWriteHandler(0x3c9, write_p3c9);
+	IO_RegisterReadHandler(0x3c9, read_p3c9);
 	}

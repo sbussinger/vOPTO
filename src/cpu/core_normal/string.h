@@ -9,340 +9,437 @@ enum STRING_OP {
 };
 
 #define LoadD(_BLAH) _BLAH
+#define R_OPTAT 6
+#define R_OPTCOR() if (CPU_Cycles > 0) CPU_Cycles += (count>>1)+(count>>2)-2		// CPU time corrects to ~25%
+//#define R_OPTCOR() if (CPU_Cycles > 0) CPU_Cycles += (count*4)/5-2
+#define BaseDI SegBase(es)
+#define BaseSI BaseDS
 
 static void DoString(STRING_OP type)
 	{
-	PhysPt  si_base, di_base;
 	Bitu	si_index, di_index;
 	Bitu	add_mask;
-	Bitu	count, count_left;
+	Bitu	count;
 
-	si_base = BaseDS;
-	di_base = SegBase(es);
-	add_mask = AddrMaskTable[core.prefixes & PREFIX_ADDR];
-	si_index = reg_esi & add_mask;
-	di_index = reg_edi & add_mask;
+	add_mask = AddrMaskTable[core.prefixes&PREFIX_ADDR];
 	if (!TEST_PREFIX_REP)
 		count = 1;
 	else
 		{
-		count = reg_ecx & add_mask;
+		count = reg_ecx&add_mask;
+		if (count == 0)																// Seems to occur sometimes (calculated CX)
+			return;																	// Also required for do...while handling single operations
 		CPU_Cycles++;
-		// Calculate amount of ops to do before cycles run out
-		if ((count > (Bitu)CPU_Cycles) && (type < R_SCASB))
-			{
-			if (count-(Bitu)CPU_Cycles > (Bitu)CPU_CycleMax/10)
+		if (type < R_SCASB)															// Won't interrupt scas and cmps instruction since they can interrupt themselves
+			{																		// So they are also not limited to use cycles!
+			if (count > (Bitu)CPU_Cycles)											// Calculate amount of ops to do before cycles run out
 				{
-				count_left = count-CPU_Cycles;
-				count = CPU_Cycles;
-				LOADIP;			// RESET IP to the start
+				if (count-(Bitu)CPU_Cycles > (Bitu)CPU_CycleMax/16)
+					{
+					reg_ecx = (reg_ecx&~add_mask)|(count-CPU_Cycles);
+					count = CPU_Cycles;
+					LOADIP;															// Reset IP to the start
+					}
+				else
+					reg_ecx &= ~add_mask;
+				CPU_Cycles = 0;
 				}
 			else
-				count_left = 0;
-			CPU_Cycles = 0;
-			}
-		else
-			{
-			if ((count <= 1) && (CPU_Cycles <= 1))							// Won't interrupt scas and cmps instruction since they can interrupt themselves
-				CPU_Cycles--;
-			else if (type < R_SCASB)
-//				CPU_Cycles -= count;
-				CPU_Cycles -= (min(count, 2)+count/8);						// For the time being (the whole Cycles modus will be dropped) some mix of optimized functions
-			count_left = 0;
+				{																	// So they are also not limited to use cycles!
+				CPU_Cycles -= count;
+				reg_ecx &= ~add_mask;
+				}
 			}
 		}
 	Bits add_index = cpu.direction;
-	if (count)
-		switch (type)
-			{
-		case R_LODSB:
-			for (; count; count--)
-				{
-				reg_al = vPC_rLodsb(si_base+si_index);
-				si_index = (si_index+add_index) & add_mask;
-				}
-			break;
-		case R_STOSW:
-			add_index <<= 1;
-			if (count > 5)											// try to optimize if more than 5 words
-				{
-				Bitu di_newindex = di_index+(add_index*count)-add_index;
-				if ((di_newindex&add_mask) == di_newindex)			// if no wraparound, use vPC_rStoswb()
-					{
-					if (add_index > 0)
-						vPC_rStoswb(di_base+di_index, reg_ax, count+count);
-					else
-						vPC_rStoswb(di_base+di_newindex, reg_ax, count+count);
-					di_index = (di_newindex + add_index)&add_mask;
-					count = 0;
-					break;
-					}
-				}
-			for (; count; count--)	
-				{
-				vPC_rStosw(di_base+di_index, reg_ax);
-				di_index = (di_index+add_index) & add_mask;
-				}
-			break;
-		case R_STOSB:
-			{
-			if (count > 5)											// try to optimize if more than 5 bytes
-				{
-				Bitu di_newindex = di_index+(add_index*count)-add_index;
-				if ((di_newindex&add_mask) == di_newindex)			// if no wraparound, use vPC_rStoswb()
-					{
-					if (add_index > 0)
-						vPC_rStoswb(di_base+di_index, reg_al+(reg_al<<8), count);
-					else
-						vPC_rStoswb(di_base+di_newindex, reg_al+(reg_al<<8), count);
-					di_index = (di_newindex + add_index)&add_mask;
-					count = 0;
-					break;
-					}
-				}
-			for (; count; count--)									// less than 6 bytes or DI wraps around
-				{
-				vPC_rStosb(di_base+di_index, reg_al);
-				di_index = (di_index+add_index) & add_mask;
-				}
-			}
-			break;
-		case R_MOVSB:
-			if (count > 5)											// try to optimize if more than 5 bytes
-				{
-				Bitu di_newindex = di_index+(add_index*count)-add_index;
-				Bitu si_newindex = si_index+(add_index*count)-add_index;
-				if ((di_newindex&add_mask) == di_newindex &&
-					(si_newindex&add_mask) == si_newindex)			// if no wraparounds, use vPC_rMovsb()
-					{
-					if (add_index == 1)
-						vPC_rMovsb(di_base+di_index, si_base+si_index, count);
-					else
-						vPC_rMovsbDn(di_base+di_index, si_base+si_index, count);
-					di_index = (di_newindex + add_index)&add_mask;
-					si_index = (si_newindex + add_index)&add_mask;
-					count = 0;
-					break;
-					}
-				}
-			for (; count; count--)									// Less than 6 bytes or SI/DI wraps around
-				{
-				vPC_rStosb(di_base+di_index, vPC_rLodsb(si_base+si_index));
-				di_index = (di_index+add_index)&add_mask;
-				si_index = (si_index+add_index)&add_mask;
-				}
-			break;
-		case R_LODSW:
-			add_index <<= 1;
-			for (; count; count--)
-				{
-				reg_ax = vPC_rLodsw(si_base+si_index);
-				si_index = (si_index+add_index) & add_mask;
-				}
-			break;
-		case R_MOVSW:
-			{
-			add_index <<= 1;
-			if (count > 5)											// Try to optimize if more than 5 words
-				{
-				Bitu di_newindex = di_index+(add_index*count)-add_index;
-				Bitu si_newindex = si_index+(add_index*count)-add_index;
-				if ((di_newindex&add_mask) == di_newindex &&
-					(si_newindex&add_mask) == si_newindex)			// If no wraparounds, use vPC_rMovsw()
-					{
-					if (add_index == 2)
-						vPC_rMovsw(di_base+di_index, si_base+si_index, count);
-					else
-						vPC_rMovswDn(di_base+di_index, si_base+si_index, count);
-					di_index = (di_newindex + add_index)&add_mask;
-					si_index = (si_newindex + add_index)&add_mask;
-					count = 0;
-					break;
-					}
-				}
-			for (; count; count--)									// Less than 6 words or SI/DI wraps around
-				{
-				vPC_rStosw(di_base+di_index, vPC_rLodsw(si_base+si_index));
-				di_index = (di_index+add_index) & add_mask;
-				si_index = (si_index+add_index) & add_mask;
-				}
-			}
-			break;
-		case R_OUTSB:
-			for (; count; count--)
-				{
-				IO_WriteB(reg_dx, vPC_rLodsb(si_base+si_index));
-				si_index = (si_index+add_index) & add_mask;
-				}
-			break;
-		case R_OUTSW:
-			add_index <<= 1;
-			for (; count; count--)
-				{
-				IO_WriteW(reg_dx, vPC_rLodsw(si_base+si_index));
-				si_index = (si_index+add_index) & add_mask;
-			}
-			break;
-		case R_OUTSD:
-			add_index <<= 2;
-			for (; count; count--)
-				{
-				IO_WriteD(reg_dx, vPC_rLodsd(si_base+si_index));
-				si_index = (si_index+add_index) & add_mask;
-				}
-			break;
-		case R_INSB:
-			for (; count; count--)
-				{
-				SaveMb(di_base+di_index, IO_ReadB(reg_dx));
-				di_index = (di_index+add_index) & add_mask;
-				}
-			break;
-		case R_INSW:
-			add_index <<= 1;
-			for (; count; count--)
-				{
-				SaveMw(di_base+di_index, IO_ReadW(reg_dx));
-				di_index = (di_index+add_index) & add_mask;
-				}
-			break;
-		case R_STOSD:
-			add_index <<= 2;
-			for (; count; count--)
-				{
-				vPC_rStosd(di_base+di_index, reg_eax);
-				di_index = (di_index+add_index) & add_mask;
-				}
-			break;
-		case R_MOVSD:
-			add_index <<= 2;
-			for (; count; count--)
-				{
-				vPC_rStosd(di_base+di_index, vPC_rLodsd(si_base+si_index));
-				di_index = (di_index+add_index) & add_mask;
-				si_index = (si_index+add_index) & add_mask;
-				}
-			break;
-		case R_LODSD:
-			add_index <<= 2;
-			for (; count; count--)
-				{
-				reg_eax = vPC_rLodsd(si_base+si_index);
-				si_index = (si_index+add_index) & add_mask;
-				}
-			break;
-		case R_SCASB:
-			{
-			Bit8u val2;
-			for (; count;)
-				{
-				count--;
-				CPU_Cycles--;
-				val2 = vPC_rLodsb(di_base+di_index);
-				di_index = (di_index+add_index) & add_mask;
-				if ((reg_al == val2) != core.rep_zero)
-					break;
-				}
-			CMPB(reg_al, val2, LoadD, 0);
-			}
-			break;
-		case R_SCASW:
-			{
-			add_index <<= 1;
-			Bit16u val2;
-			for (; count;)
-				{
-				count--;
-				CPU_Cycles--;
-				val2 = vPC_rLodsw(di_base+di_index);
-				di_index = (di_index+add_index) & add_mask;
-				if ((reg_ax == val2) != core.rep_zero)
-					break;
-				}
-			CMPW(reg_ax, val2, LoadD, 0);
-			}
-			break;
-		case R_SCASD:
-			{
-			add_index <<= 2;
-			Bit32u val2;
-			for (; count;)
-				{
-				count--;
-				CPU_Cycles--;
-				val2 = vPC_rLodsd(di_base+di_index);
-				di_index = (di_index+add_index) & add_mask;
-				if ((reg_eax == val2) != core.rep_zero)
-					break;
-				}
-			CMPD(reg_eax, val2, LoadD, 0);
-			}
-			break;
-		case R_CMPSB:
-			{
-			Bit8u val1, val2;
-			for (; count;)
-				{
-				count--;
-				CPU_Cycles--;
-				val1 = vPC_rLodsb(si_base+si_index);
-				val2 = vPC_rLodsb(di_base+di_index);
-				si_index = (si_index+add_index) & add_mask;
-				di_index = (di_index+add_index) & add_mask;
-				if ((val1 == val2) != core.rep_zero)
-					break;
-				}
-			CMPB(val1, val2, LoadD, 0);
-			}
-			break;
-		case R_CMPSW:
-			{
-			add_index <<= 1;
-			Bit16u val1, val2;
-			for (; count;)
-				{
-				count--;
-				CPU_Cycles--;
-				val1 = vPC_rLodsw(si_base+si_index);
-				val2 = vPC_rLodsw(di_base+di_index);
-				si_index = (si_index+add_index) & add_mask;
-				di_index = (di_index+add_index) & add_mask;
-				if ((val1 == val2) != core.rep_zero)
-					break;
-				}
-			CMPW(val1, val2, LoadD, 0);
-			}
-			break;
-		case R_CMPSD:
-			{
-			add_index <<= 2;
-			Bit32u val1, val2;
-			for (; count;)
-				{
-				count--;
-				CPU_Cycles--;
-				val1 = vPC_rLodsd(si_base+si_index);
-				val2 = vPC_rLodsd(di_base+di_index);
-				si_index = (si_index+add_index) & add_mask;
-				di_index = (di_index+add_index) & add_mask;
-				if ((val1 == val2) != core.rep_zero)
-					break;
-				}
-			CMPD(val1, val2, LoadD, 0);
-			}
-			break;
-		default:
-			LOG(LOG_CPU, LOG_ERROR)("Unhandled string op %d", type);
-			}
-	// Clean up after certain amount of instructions
-	reg_esi &= (~add_mask);
-	reg_esi |= (si_index & add_mask);
-	reg_edi &= (~add_mask);
-	reg_edi |= (di_index & add_mask);
-	if (TEST_PREFIX_REP)
+
+	switch (type)
 		{
-		count += count_left;
-		reg_ecx &= (~add_mask);
-		reg_ecx |= (count & add_mask);
+	case R_OUTSB:
+		si_index = reg_esi&add_mask;
+		do
+			{
+			IO_WriteB(reg_dx, Mem_Lodsb(BaseSI+si_index));
+			si_index = (si_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		break;
+	case R_OUTSW:
+		add_index <<= 1;
+		si_index = reg_esi&add_mask;
+		do
+			{
+			IO_WriteW(reg_dx, Mem_Lodsw(BaseSI+si_index));
+			si_index = (si_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		break;
+	case R_OUTSD:
+		add_index <<= 2;
+		si_index = reg_esi&add_mask;
+		do
+			{
+			IO_WriteD(reg_dx, Mem_Lodsd(BaseSI+si_index));
+			si_index = (si_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		break;
+	case R_INSB:
+		di_index = reg_edi&add_mask;
+		do
+			{
+			Mem_Stosb(BaseDI+di_index, IO_ReadB(reg_dx));
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		break;
+	case R_INSW:
+		add_index <<= 1;
+		di_index = reg_edi&add_mask;
+		do
+			{
+			Mem_Stosw(BaseDI+di_index, IO_ReadW(reg_dx));
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		break;
+	case R_INSD:
+		add_index <<= 2;
+		di_index = reg_edi&add_mask;
+		do
+			{
+			Mem_Stosd(BaseDI+di_index, IO_ReadD(reg_dx));
+			di_index = (di_index+add_index) & add_mask;
+			}
+		while (--count);
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		break;
+	case R_MOVSB:
+		si_index = reg_esi&add_mask;
+		di_index = reg_edi&add_mask;
+		if (count >= R_OPTAT && add_index > 0)										// Try to optimize if direction is up (down is used rarely)
+			{
+			Bitu di_newindex = di_index+(add_index*count)-add_index;
+			Bitu si_newindex = si_index+(add_index*count)-add_index;
+			if (((di_newindex|si_newindex)&add_mask) == (di_newindex|si_newindex))	// If no wraparounds, use Mem_rMovsb()
+				{
+				Mem_rMovsb(BaseDI+di_index, BaseSI+si_index, count);
+				di_index = (di_newindex+add_index)&add_mask;
+				si_index = (si_newindex+add_index)&add_mask;
+				R_OPTCOR();
+				reg_esi = (reg_esi&~add_mask)|si_index;
+				reg_edi = (reg_edi&~add_mask)|di_index;
+				break;
+				}
+			}
+		do																			// Count too low or SI/DI wraps around
+			{
+			Mem_Stosb(BaseDI+di_index, Mem_Lodsb(BaseSI+si_index));
+			di_index = (di_index+add_index)&add_mask;
+			si_index = (si_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		break;
+	case R_MOVSW:
+		{
+		add_index <<= 1;
+		si_index = reg_esi&add_mask;
+		di_index = reg_edi&add_mask;
+		if (count >= R_OPTAT && add_index > 0)										// Try to optimize if direction is up
+			{
+			Bitu di_newindex = di_index+(add_index*count)-add_index;
+			Bitu si_newindex = si_index+(add_index*count)-add_index;
+			if (((di_newindex|si_newindex)&add_mask) == (di_newindex|si_newindex))	// If no wraparounds, use Mem_rMovsb()
+				{
+//				Mem_rMovsw(BaseDI+di_index, BaseSI+si_index, count);
+				Mem_rMovsb(BaseDI+di_index, BaseSI+si_index, count*2);
+				di_index = (di_newindex+add_index)&add_mask;
+				si_index = (si_newindex+add_index)&add_mask;
+				R_OPTCOR();
+				reg_esi = (reg_esi&~add_mask)|si_index;
+				reg_edi = (reg_edi&~add_mask)|di_index;
+				break;
+				}
+			}
+		do																			// Count too low or SI/DI wraps around
+			{
+			Mem_Stosw(BaseDI+di_index, Mem_Lodsw(BaseSI+si_index));
+			di_index = (di_index+add_index)&add_mask;
+			si_index = (si_index+add_index)&add_mask;
+			}
+		while (--count);
+		}
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		break;
+	case R_MOVSD:
+		add_index <<= 2;
+		si_index = reg_esi&add_mask;
+		di_index = reg_edi&add_mask;
+		if (count >= R_OPTAT && add_index > 0)										// Try to optimize if direction is up
+			{
+			Bitu di_newindex = di_index+(add_index*count)-add_index;
+			Bitu si_newindex = si_index+(add_index*count)-add_index;
+			if (((di_newindex|si_newindex)&add_mask) == (di_newindex|si_newindex))	// If no wraparounds, use Mem_rMovsb()
+				{
+//				Mem_rMovsd(BaseDI+di_index, BaseSI+si_index, count);
+				Mem_rMovsb(BaseDI+di_index, BaseSI+si_index, count*4);
+				di_index = (di_newindex+add_index)&add_mask;
+				si_index = (si_newindex+add_index)&add_mask;
+				R_OPTCOR();
+				reg_esi = (reg_esi&~add_mask)|si_index;
+				reg_edi = (reg_edi&~add_mask)|di_index;
+				break;
+				}
+			}
+		do
+			{
+			Mem_Stosd(BaseDI+di_index, Mem_Lodsd(BaseSI+si_index));
+			di_index = (di_index+add_index)&add_mask;
+			si_index = (si_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		break;
+	case R_LODSB:
+		si_index = reg_esi&add_mask;
+		do
+			{
+			reg_al = Mem_Lodsb(BaseSI+si_index);
+			si_index = (si_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		break;
+	case R_LODSW:
+		add_index <<= 1;
+		si_index = reg_esi&add_mask;
+		do
+			{
+			reg_ax = Mem_Lodsw(BaseSI+si_index);
+			si_index = (si_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		break;
+	case R_LODSD:
+		add_index <<= 2;
+		si_index = reg_esi&add_mask;
+		do
+			{
+			reg_eax = Mem_Lodsd(BaseSI+si_index);
+			si_index = (si_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		break;
+	case R_STOSB:
+		{
+		di_index = reg_edi&add_mask;
+		if (count >= R_OPTAT)														// Try to optimize
+			{
+			Bitu di_newindex = di_index+(add_index*count)-add_index;
+			if ((di_newindex&add_mask) == di_newindex)								// If no wraparound, use Mem_rStosb()
+				{
+				Mem_rStosb(BaseDI+(add_index > 0 ? di_index : di_newindex), reg_al, count);
+				di_index = (di_newindex+add_index)&add_mask;
+				R_OPTCOR();
+				reg_edi = (reg_edi&~add_mask)|di_index;
+				break;
+				}
+			}
+		do																			// Count too low or DI wraps around
+			{
+			Mem_Stosb(BaseDI+di_index, reg_al);
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count);
+		}
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		break;
+	case R_STOSW:
+		add_index <<= 1;
+		di_index = reg_edi&add_mask;
+		if (count >= R_OPTAT)														// Try to optimize
+			{
+			Bitu di_newindex = di_index+(add_index*count)-add_index;
+			if ((di_newindex&add_mask) == di_newindex)								// If no wraparound, use Mem_rStosw()
+				{
+				if (reg_al == reg_ah)												// NB, memset runtime is 32 bits optimized
+					Mem_rStosb(BaseDI+(add_index > 0 ? di_index : di_newindex), reg_al, count*2);
+				else
+					Mem_rStosw(BaseDI+(add_index > 0 ? di_index : di_newindex), reg_ax, count);
+				di_index = (di_newindex+add_index)&add_mask;
+				R_OPTCOR();
+				reg_edi = (reg_edi&~add_mask)|di_index;
+				break;
+				}
+			}
+		do																			// Count too low or DI wraps around
+			{
+			Mem_Stosw(BaseDI+di_index, reg_ax);
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		break;
+	case R_STOSD:
+		add_index <<= 2;
+		di_index = reg_edi&add_mask;
+		if (count >= R_OPTAT)														// Try to optimize
+			{
+			Bitu di_newindex = di_index+(add_index*count)-add_index;
+			if ((di_newindex&add_mask) == di_newindex)								// If no wraparound, use Mem_Stosd()
+				{
+				if ((reg_eax>>16) == reg_ax && reg_ah == reg_al)					// NB, memset runtime is 32 bits optimized
+					Mem_rStosb(BaseDI+(add_index > 0 ? di_index : di_newindex), reg_al, count*4);
+				else
+					Mem_rStosd(BaseDI+(add_index > 0 ? di_index : di_newindex), reg_eax, count);
+				di_index = (di_newindex+add_index)&add_mask;
+				R_OPTCOR();
+				reg_edi = (reg_edi&~add_mask)|di_index;
+				break;
+				}
+			}
+		do
+			{
+			Mem_Stosd(BaseDI+di_index, reg_eax);
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count);
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		break;
+	case R_SCASB:
+		{
+		di_index = reg_edi&add_mask;
+		Bit8u val2;
+		CPU_Cycles -= count;
+		do
+			{
+			val2 = Mem_Lodsb(BaseDI+di_index);
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count && (reg_al == val2) == core.rep_zero);
+		CPU_Cycles += count;
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		if (TEST_PREFIX_REP)
+			reg_ecx = (reg_ecx&~add_mask)|count;
+		CMPB(reg_al, val2, LoadD, 0);
+		}
+		break;
+	case R_SCASW:
+		{
+		add_index <<= 1;
+		di_index = reg_edi&add_mask;
+		Bit16u val2;
+		CPU_Cycles -= count;
+		do
+			{
+			val2 = Mem_Lodsw(BaseDI+di_index);
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count && (reg_ax == val2) == core.rep_zero);
+		CPU_Cycles += count;
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		if (TEST_PREFIX_REP)
+			reg_ecx = (reg_ecx&~add_mask)|count;
+		CMPW(reg_ax, val2, LoadD, 0);
+		}
+		break;
+	case R_SCASD:
+		{
+		add_index <<= 2;
+		di_index = reg_edi&add_mask;
+		Bit32u val2;
+		CPU_Cycles -= count;
+		do
+			{
+			val2 = Mem_Lodsd(BaseDI+di_index);
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count && (reg_eax == val2) == core.rep_zero);
+		CPU_Cycles += count;
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		if (TEST_PREFIX_REP)
+			reg_ecx = (reg_ecx&~add_mask)|count;
+		CMPD(reg_eax, val2, LoadD, 0);
+		}
+		break;
+	case R_CMPSB:
+		{
+		si_index = reg_esi&add_mask;
+		di_index = reg_edi&add_mask;
+		Bit8u val1, val2;
+		CPU_Cycles -= count;
+		do
+			{
+			val1 = Mem_Lodsb(BaseSI+si_index);
+			val2 = Mem_Lodsb(BaseDI+di_index);
+			si_index = (si_index+add_index)&add_mask;
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count && (val1 == val2) == core.rep_zero);
+		CPU_Cycles += count;
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		if (TEST_PREFIX_REP)
+			reg_ecx = (reg_ecx&~add_mask)|count;
+		CMPB(val1, val2, LoadD, 0);
+		}
+		break;
+	case R_CMPSW:
+		{
+		add_index <<= 1;
+		si_index = reg_esi&add_mask;
+		di_index = reg_edi&add_mask;
+		Bit16u val1, val2;
+		CPU_Cycles -= count;
+		do
+			{
+			val1 = Mem_Lodsw(BaseSI+si_index);
+			val2 = Mem_Lodsw(BaseDI+di_index);
+			si_index = (si_index+add_index)&add_mask;
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count && (val1 == val2) == core.rep_zero);
+		CPU_Cycles += count;
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		if (TEST_PREFIX_REP)
+			reg_ecx = (reg_ecx&~add_mask)|count;
+		CMPW(val1, val2, LoadD, 0);
+		}
+		break;
+	case R_CMPSD:
+		{
+		add_index <<= 2;
+		si_index = reg_esi&add_mask;
+		di_index = reg_edi&add_mask;
+		Bit32u val1, val2;
+		CPU_Cycles -= count;
+		do
+			{
+			val1 = Mem_Lodsd(BaseSI+si_index);
+			val2 = Mem_Lodsd(BaseDI+di_index);
+			si_index = (si_index+add_index)&add_mask;
+			di_index = (di_index+add_index)&add_mask;
+			}
+		while (--count && (val1 == val2) == core.rep_zero);
+		CPU_Cycles += count;
+		reg_esi = (reg_esi&~add_mask)|si_index;
+		reg_edi = (reg_edi&~add_mask)|di_index;
+		if (TEST_PREFIX_REP)
+			reg_ecx = (reg_ecx&~add_mask)|count;
+		CMPD(val1, val2, LoadD, 0);
+		}
+		break;
 		}
 	}

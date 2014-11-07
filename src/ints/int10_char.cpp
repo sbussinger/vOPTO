@@ -8,7 +8,7 @@
 static void EGA16_CopyRow(Bit8u cleft, Bit8u cright, Bit8u rold, Bit8u rnew, PhysPt base)
 	{
 	PhysPt src, dest;
-	Bit8u cheight = vPC_rLodsb(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT);
+	Bit8u cheight = Mem_Lodsb(BIOSMEM_SEG,BIOSMEM_CHAR_HEIGHT);
 	dest = base+(CurMode->twidth*rnew)*cheight+cleft;
 	src = base+(CurMode->twidth*rold)*cheight+cleft;
 	Bitu nextline = CurMode->twidth;
@@ -21,7 +21,7 @@ static void EGA16_CopyRow(Bit8u cleft, Bit8u cright, Bit8u rold, Bit8u rnew, Phy
 	Bitu rowsize = (cright-cleft);
 	for (Bitu copy = cheight; copy > 0; copy--)
 		{
-		vPC_rMovsb(dest, src, rowsize);
+		Mem_rMovsb(dest, src, rowsize);
 		dest += nextline;
 		src += nextline;
 		}
@@ -29,25 +29,9 @@ static void EGA16_CopyRow(Bit8u cleft, Bit8u cright, Bit8u rold, Bit8u rnew, Phy
 	IO_Write(0x3cf, 0);																			// Normal transfer mode
 	}
 
-static void VGA_CopyRow(Bit8u cleft, Bit8u cright, Bit8u rold, Bit8u rnew, PhysPt base)
-	{
-	PhysPt src, dest;
-	Bit8u cheight = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT);
-	dest = base+8*((CurMode->twidth*rnew)*cheight+cleft);
-	src = base+8*((CurMode->twidth*rold)*cheight+cleft);
-	Bitu nextline = 8*CurMode->twidth;
-	Bitu rowsize = 8*(cright-cleft);
-	for (Bitu copy = cheight; copy > 0; copy--)
-		{
-		vPC_rMovsb(dest, src, rowsize);
-		dest += nextline;
-		src += nextline;
-		}
-	}
-
 static inline void TEXT_CopyRow(Bit8u cleft, Bit8u cright, Bit8u rold, Bit8u rnew, PhysPt base)
 	{
-	vPC_rMovsb(base+(rnew*CurMode->twidth+cleft)*2, base+(rold*CurMode->twidth+cleft)*2, (cright-cleft)*2);
+	Mem_rMovsb(base+(rnew*CurMode->twidth+cleft)*2, base+(rold*CurMode->twidth+cleft)*2, (cright-cleft)*2);
 	}
 
 static void EGA16_FillRow(Bit8u cleft, Bit8u cright, Bit8u row, PhysPt base, Bit8u attr)
@@ -59,37 +43,23 @@ static void EGA16_FillRow(Bit8u cleft, Bit8u cright, Bit8u row, PhysPt base, Bit
 	IO_Write(0x3ce, 0x1);
 	IO_Write(0x3cf, 0xf);
 	
-	Bit8u cheight = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT);								// Write some bytes
+	Bit8u cheight = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT);								// Write some bytes
 	PhysPt dest = base+(CurMode->twidth*row)*cheight+cleft;	
 	Bitu nextline = CurMode->twidth;
 	Bitu rowsize = (cright-cleft);
 	for (Bitu copy = cheight; copy > 0; copy--)
 		{
-		vPC_rStoswb(dest, 0xffff, rowsize);
+		Mem_rStosb(dest, 0xff, rowsize);
 		dest += nextline;
 		}
 	IO_Write(0x3cf, 0);
 	}
 
-static void VGA_FillRow(Bit8u cleft, Bit8u cright, Bit8u row, PhysPt base, Bit8u attr)
-	{
-	Bit8u cheight = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT);								// Write some bytes
-	PhysPt dest = base+8*((CurMode->twidth*row)*cheight+cleft);
-	Bitu nextline = 8*CurMode->twidth;
-	Bitu rowsize = 8*(cright-cleft);
-	Bit16u attrw = attr + (attr<<8);
-	for (Bitu copy = cheight; copy > 0; copy--)
-		{
-		vPC_rStoswb(dest, attrw, rowsize);
-		dest += nextline;
-		}
-	}
-
 static inline void TEXT_FillRow(Bit8u cleft, Bit8u cright, Bit8u row, PhysPt base, Bit8u attr)
 	{
-	PhysPt dest = base+(row*CurMode->twidth+cleft)*2;											// Do some filing
+	LinPt dest = base+(row*CurMode->twidth+cleft)*2;											// Do some filing
 	Bit16u fill = (attr<<8) + ' ';
-	vPC_rStoswb(dest, fill, (cright-cleft)<<1);
+	Mem_rStosw(dest, fill, cright-cleft);
 	}
 
 void INT10_ScrollWindow(Bit8u rul, Bit8u cul, Bit8u rlr, Bit8u clr, Bit8s nlines, Bit8u attr, Bit8u page)
@@ -107,8 +77,8 @@ void INT10_ScrollWindow(Bit8u rul, Bit8u cul, Bit8u rlr, Bit8u clr, Bit8s nlines
 	clr++;
 
 	if (page == 0xFF)																			// Get the correct page
-		page = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
-	PhysPt base = CurMode->pstart+page*vPC_rLodsw(BIOSMEM_SEG,BIOSMEM_PAGE_SIZE);
+		page = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
+	PhysPt base = CurMode->pstart+page*Mem_Lodsw(BIOSMEM_SEG,BIOSMEM_PAGE_SIZE);
 
 	Bit8u start, end;																			// See how much lines need to be copied
 	Bits next;
@@ -140,9 +110,6 @@ void INT10_ScrollWindow(Bit8u rul, Bit8u cul, Bit8u rlr, Bit8u clr, Bit8s nlines
 		case M_EGA:		
 			EGA16_CopyRow(cul, clr, start, start+nlines, base);
 			break;
-		case M_VGA:		
-			VGA_CopyRow(cul, clr, start, start+nlines, base);
-			break;
 			}	
 		} 
 
@@ -164,9 +131,6 @@ filling:																						// Fill some lines
 		case M_EGA:		
 			EGA16_FillRow(cul, clr, start, base, attr);
 			break;
-		case M_VGA:		
-			VGA_FillRow(cul, clr, start, base, attr);
-			break;
 			}	
 		start++;
 		} 
@@ -176,25 +140,25 @@ void INT10_SetActivePage(Bit8u page)
 	{
 	if (page < 8)
 		{
-		Bit16u mem_address = page*vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_PAGE_SIZE);
-		vPC_rStosw(BIOSMEM_SEG, BIOSMEM_CURRENT_START, mem_address);							// Write the new page start
+		Bit16u mem_address = page*Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_PAGE_SIZE);
+		Mem_Stosw(BIOSMEM_SEG, BIOSMEM_CURRENT_START, mem_address);							// Write the new page start
 		if (CurMode->mode < 8)
 			mem_address >>= 1;
-		Bit16u base = vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS);							// Write the new start address in vgahardware
+		Bit16u base = Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS);							// Write the new start address in vgahardware
 		IO_Write(base, 0x0c);
 		IO_Write(base+1, (Bit8u)(mem_address>>8));
 		IO_Write(base, 0x0d);
 		IO_Write(base+1, (Bit8u)mem_address);
 		
-		vPC_rStosb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE, page);									// And change the BIOS page
+		Mem_Stosb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE, page);									// And change the BIOS page
 		INT10_SetCursorPos(CURSOR_POS_ROW(page), CURSOR_POS_COL(page), page);					// Display the cursor, now the page is active
 		}
 	}
 
 void INT10_SetCursorShape(Bit8u first, Bit8u last)
 	{
-	vPC_rStosw(BIOSMEM_SEG, BIOSMEM_CURSOR_TYPE, last|(first<<8));
-	if (!(vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL) & 0x8))									// Skip CGA cursor emulation if EGA/VGA system is active
+	Mem_Stosw(BIOSMEM_SEG, BIOSMEM_CURSOR_TYPE, last|(first<<8));
+	if (!(Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL) & 0x8))									// Skip CGA cursor emulation if EGA/VGA system is active
 		{
 		if ((first & 0x60) == 0x20)																// Check for CGA type 01, invisible
 			{
@@ -202,12 +166,12 @@ void INT10_SetCursorShape(Bit8u first, Bit8u last)
 			last = 0x00;
 			goto dowrite;
 			}
-		if (!(vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL) & 0x1))								// Check if we need to convert CGA Bios cursor values
+		if (!(Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL) & 0x1))								// Check if we need to convert CGA Bios cursor values
 			{																					// Set by int10 fun12 sub34
 //			if (CurMode->mode>0x3) goto dowrite;												// Only mode 0-3 are text modes on cga
 			if ((first & 0xe0) || (last & 0xe0))
 				goto dowrite;
-			Bit8u cheight = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT)-1;
+			Bit8u cheight = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT)-1;
 			if (last < first)																	// Creative routine I based of the original ibmvga bios
 				{
 				if (!last)
@@ -241,7 +205,7 @@ void INT10_SetCursorShape(Bit8u first, Bit8u last)
 			}
 		}
 dowrite:
-	Bit16u base = vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS);
+	Bit16u base = Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS);
 	IO_Write(base, 0xa);
 	IO_Write(base+1, first);
 	IO_Write(base, 0xb);
@@ -250,15 +214,15 @@ dowrite:
 
 void INT10_SetCursorPos(Bit8u row, Bit8u col, Bit8u page)
 	{
-	vPC_rStosw(BIOSMEM_SEG, BIOSMEM_CURSOR_POS+page*2, (row<<8) + col);							// BIOS cursor pos
-	if (page == vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE))									// Set the hardware cursor
+	Mem_Stosw(BIOSMEM_SEG, BIOSMEM_CURSOR_POS+page*2, (row<<8) + col);							// BIOS cursor pos
+	if (page == Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE))									// Set the hardware cursor
 		{
 		BIOS_NCOLS;																				// Get the dimensions
 		// Calculate the address knowing nbcols nbrows and page num
 		// NOTE: BIOSMEM_CURRENT_START counts in colour/flag pairs
-		Bit16u address = (ncols*row)+col+vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_CURRENT_START)/2;
+		Bit16u address = (ncols*row)+col+Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_CURRENT_START)/2;
 		// CRTC regs 0x0e and 0x0f
-		Bit16u base = vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS);
+		Bit16u base = Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS);
 		IO_Write(base, 0x0e);
 		IO_Write(base+1, (Bit8u)(address>>8));
 		IO_Write(base, 0x0f);
@@ -268,9 +232,9 @@ void INT10_SetCursorPos(Bit8u row, Bit8u col, Bit8u page)
 
 void ReadCharAttr(Bit16u col, Bit16u row, Bit8u page, Bit16u * result)							// Externally used by the mouse routine
 	{
-	Bit16u address = page*vPC_rLodsw(BIOSMEM_SEG,BIOSMEM_PAGE_SIZE);							// Compute the address
-	address += (row*vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_NB_COLS)+col)*2;
-	*result = vPC_rLodsw(CurMode->pstart+address);												// Read the char
+	Bit16u address = page*Mem_Lodsw(BIOSMEM_SEG,BIOSMEM_PAGE_SIZE);							// Compute the address
+	address += (row*Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_NB_COLS)+col)*2;
+	*result = Mem_Lodsw(CurMode->pstart+address);												// Read the char
 	}
 
 void INT10_ReadCharAttr(Bit16u * result, Bit8u page)
@@ -281,7 +245,7 @@ void INT10_ReadCharAttr(Bit16u * result, Bit8u page)
 		return;
 		}
 	if (page == 0xFF)
-		page = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
+		page = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
 	ReadCharAttr(CURSOR_POS_COL(page), CURSOR_POS_ROW(page), page, result);
 	}
 
@@ -290,15 +254,15 @@ void WriteChar(Bit16u col, Bit16u row, Bit8u page, Bit8u chr, Bit8u attr, bool u
 	if (CurMode->type == M_TEXT)
 		{
 		// Compute the address  
-		Bit16u address = page*vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_PAGE_SIZE) + (row*vPC_rLodsw(BIOSMEM_SEG,BIOSMEM_NB_COLS)+col)*2;
+		Bit16u address = page*Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_PAGE_SIZE) + (row*Mem_Lodsw(BIOSMEM_SEG,BIOSMEM_NB_COLS)+col)*2;
 		PhysPt pos = CurMode->pstart+address;													// Write the char 
-		vPC_rStosb(pos, chr);
+		Mem_Stosb(pos, chr);
 		if (useattr)
-			vPC_rStosb(pos+1, attr);
+			Mem_Stosb(pos+1, attr);
 		return;
 		}
 
-	Bit8u cheight = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT);
+	Bit8u cheight = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT);
 	RealPt fontdata = SegOff2dWord(RealSeg(RealGetVec(0x43)), RealOff(RealGetVec(0x43)) + chr*cheight);
 	if (!useattr)
 		attr = 0xf;																				// Set attribute(color) to a sensible value
@@ -310,7 +274,6 @@ void WriteChar(Bit16u col, Bit16u row, Bit8u page, Bit8u chr, Bit8u attr, bool u
 
 	Bitu x = 8*col;
 	Bitu y = cheight*row;
-	Bit8u xor_mask = (CurMode->type == M_VGA) ? 0x0 : 0x80;
 	// TODO Check for out of bounds
 	if (CurMode->type == M_EGA)
 		{
@@ -323,7 +286,7 @@ void WriteChar(Bit16u col, Bit16u row, Bit8u page, Bit8u chr, Bit8u attr, bool u
 	for (Bit8u h = 0; h < cheight; h++)
 		{
 		Bit8u bitsel = 128;
-		Bit8u bitline = vPC_rLodsb(dWord2Ptr(fontdata));
+		Bit8u bitline = Mem_Lodsb(dWord2Ptr(fontdata));
 		fontdata = SegOff2dWord(RealSeg(fontdata), RealOff(fontdata)+ 1);
 		Bit16u tx = (Bit16u)x;
 		while (bitsel)
@@ -331,7 +294,7 @@ void WriteChar(Bit16u col, Bit16u row, Bit8u page, Bit8u chr, Bit8u attr, bool u
 			if (bitline&bitsel)
 				INT10_PutPixel(tx, (Bit16u)y, page, attr);
 			else
-				INT10_PutPixel(tx, (Bit16u)y, page, attr & xor_mask);
+				INT10_PutPixel(tx, (Bit16u)y, page, attr & 0x80);
 			tx++;
 			bitsel >>= 1;
 			}
@@ -413,7 +376,7 @@ static void INT10_TeletypeOutputAttr(Bit8u chr, Bit8u attr, bool useattr, Bit8u 
 
 void INT10_TeletypeOutputAttr(Bit8u chr, Bit8u attr, bool useattr)
 	{
-	INT10_TeletypeOutputAttr(chr, attr, useattr, vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE));
+	INT10_TeletypeOutputAttr(chr, attr, useattr, Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE));
 	}
 
 void INT10_TeletypeOutput(Bit8u chr, Bit8u attr)
@@ -434,9 +397,9 @@ void INT10_WriteString(Bit8u row, Bit8u col, Bit8u flag, Bit8u attr, PhysPt stri
 	INT10_SetCursorPos(row, col, page);
 	while (count > 0)
 		{
-		Bit8u chr = vPC_rLodsb(string++);
+		Bit8u chr = Mem_Lodsb(string++);
 		if (flag&2)
-			attr = vPC_rLodsb(string++);
+			attr = Mem_Lodsb(string++);
 		INT10_TeletypeOutputAttr(chr, attr, true, page);
 		count--;
 		}

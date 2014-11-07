@@ -112,16 +112,17 @@ Bit8u DOS_FindDevice(char const * name)
 	char* dot = strrchr(name_part, '.');
 	if (dot)
 		*dot = 0;	// no ext checking
+	else if (name_part[strlen(name_part)-1] == ':')									// Remove trailing ':'?
+		name_part[strlen(name_part)-1] = 0;
 
-	static char com[] = "COM1";
-	static char lpt[] = "LPT1";
 	// AUX is alias for COM1 and PRN for LPT1
 	// A bit of a hack. (but less then before).
+	static char com[] = "COM1";
+	static char lpt[] = "LPT1";
 	if (!stricmp(name_part, "AUX"))
 		name_part = com;
 	else if (!stricmp(name_part, "PRN"))
 		name_part = lpt;
-
 	// loop through devices
 	for (Bit8u index = 0; index < DOS_DEVICES; index++)
 		if (Devices[index])

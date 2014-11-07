@@ -14,8 +14,7 @@
 #define BIOS_MEMORY_SIZE                0x413
 #define BIOS_TRUE_MEMORY_SIZE           0x415
 /* #define bios_expansion_memory_size      (*(unsigned int   *) 0x415) */
-#define BIOS_KEYBOARD_STATE             0x417
-#define BIOS_KEYBOARD_FLAGS1            BIOS_KEYBOARD_STATE
+#define BIOS_KEYBOARD_FLAGS1            0x417
 #define BIOS_KEYBOARD_FLAGS2            0x418
 #define BIOS_KEYBOARD_TOKEN             0x419
 /* used for keyboard input with Alt-Number */
@@ -79,27 +78,17 @@
 #define BIOS_WAIT_FLAG_TEMP				0x4a1
 
 
-#define BIOS_PRINT_SCREEN_FLAG          0x500
+#define BIOS_DEFAULT_HANDLER_LOCATION	0xfff53
+#define BIOS_DEFAULT_IRQ0_LOCATION		0xf000fea5
+#define BIOS_DEFAULT_IRQ1_LOCATION		0xf000e987
+#define BIOS_DEFAULT_IRQ2_LOCATION		0xf000ff55
 
-#define BIOS_VIDEO_SAVEPTR              0x4a8
+#define MAX_SCAN_CODE					0x58										// Maximum of scancodes handled by keyboard bios routines
 
-
-#define BIOS_DEFAULT_HANDLER_LOCATION	(SegOff2dWord(0xf000, 0xff53))
-#define BIOS_DEFAULT_IRQ0_LOCATION		(SegOff2dWord(0xf000, 0xfea5))
-#define BIOS_DEFAULT_IRQ1_LOCATION		(SegOff2dWord(0xf000, 0xe987))
-#define BIOS_DEFAULT_IRQ2_LOCATION		(SegOff2dWord(0xf000, 0xff55))
-#define BIOS_VIDEO_TABLE_LOCATION		(SegOff2dWord(0xf000, 0xf0a4))
-
-// maximum of scancodes handled by keyboard bios routines
-#define MAX_SCAN_CODE 0x58
-
-void BIOS_PasteClipboard(Bit16u * data);				// to paste Windows clipboard to keyboard buffer
-
+void BIOS_PasteClipboard(Bit16u * data);											// To paste Windows clipboard to keyboard buffer
 bool BIOS_AddKeyToBuffer(Bit16u code);
-
-void BIOS_AddKey(Bit8u scancode, Bit16u unicode, bool pressed);
+void BIOS_AddKey(Bit8u scancode, Bit16u unicode, Bit16u symcode, bool pressed);
 bool BIOS_CheckKey(Bit16u &code);
-
 
 void BIOS_SetComPorts (Bit16u baseaddr[]);
 void BIOS_SetLPTPort (Bitu port, Bit16u baseaddr);

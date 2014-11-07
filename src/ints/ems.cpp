@@ -14,7 +14,7 @@
 #define EMS_PAGEFRAME			0xE000
 #define	EMS_HANDLES				64
 #define EMS_PAGE_SIZE			(16*1024U)
-#define EMS_MAX_PHYS			4								// 4 16kb pages in pageframe
+#define EMS_MAX_PHYS			4													// 4 16kb pages in pageframe
 
 #define EMS_VERSION				0x32
 #define	NULL_PAGE				0xffff
@@ -78,8 +78,6 @@ public:
 	HostPt PageBase;
 	};
 
-bool EMS_present = false;
-
 struct EMS_Mapping {
 	Bit16u handle;
 	Bit16u page;
@@ -104,9 +102,10 @@ public:
 		{
 		SetName("EMMXXXX0");
 		}
-	bool Read(Bit8u * /*data*/,Bit16u * /*size*/) { return false;}
-	bool Write(Bit8u * /*data*/,Bit16u * /*size*/) { return false;}
-	bool Seek(Bit32u * /*pos*/,Bit32u /*type*/) { return false;}
+	bool Read(Bit8u * /*data*/, Bit16u * /*size*/) { return false;}
+	bool Write(Bit8u * /*data*/, Bit16u * /*size*/) { return false;}
+	bool Seek(Bit32u * /*pos*/, Bit32u /*type*/) { return false;}
+	void Close(){}
 	Bit16u GetInformation(void) { return 0xc0c0;}
 	};
 
@@ -118,17 +117,17 @@ static bool ValidHandle(Bit16u handle)
 	}
 
 
-static Bit16u EMS_Defrag()										// Defrag EMS memory and return free space in pages
+static Bit16u EMS_Defrag()															// Defrag EMS memory and return free space in pages
 	{
 	Bit16u sortedHandles[EMS_HANDLES-1];
 	int numHandles = 0;
 	for (int i = 1; i < EMS_HANDLES; i++)
 		if (ems_handles[i].pages != NULL_PAGE)
 			sortedHandles[numHandles++] = i;
-	if (!numHandles)											// If no handles in use, return all EMS memory as free
+	if (!numHandles)																// If no handles in use, return all EMS memory as free
 		return (TOT_MEM_KB-1024)/16;
 
-	for (int i = 0; i < numHandles-1; i++)						// Sort the handles in order of memory address
+	for (int i = 0; i < numHandles-1; i++)											// Sort the handles in order of memory address
 		for (int j = 0; j < numHandles-1-i; j++)
 			if (ems_handles[sortedHandles[j]].addr > ems_handles[sortedHandles[j+1]].addr)
 				{
@@ -139,16 +138,16 @@ static Bit16u EMS_Defrag()										// Defrag EMS memory and return free space i
 
 	Bit32u lowAddr = 1024*1024;
 	Bit32u moveOff = 0;
-	for (int i = 0; i < numHandles; i++)						// Defrag compacting to start
+	for (int i = 0; i < numHandles; i++)											// Defrag compacting to start
 		{
 		EMS_Handle * handlePtr = &ems_handles[sortedHandles[i]];
 		if (handlePtr->addr > lowAddr)
 			{
 			moveOff += handlePtr->addr - lowAddr;
-			for (int j = 0; j < EMS_MAX_PHYS; j++)				// Relocate page handles if needed
+			for (int j = 0; j < EMS_MAX_PHYS; j++)									// Relocate page handles if needed
 				if ((Bit32u)(pHandler[j].PageBase-MemBase) >= handlePtr->addr && (Bit32u)(pHandler[j].PageBase-MemBase) < handlePtr->addr + handlePtr->pages*EMS_PAGE_SIZE)
 					pHandler[j].PageBase -= moveOff;
-			wmemmove((wchar_t *)(MemBase+lowAddr), (wchar_t *)(MemBase+handlePtr->addr), handlePtr->pages*EMS_PAGE_SIZE/2);
+			memmove(MemBase+lowAddr, MemBase+handlePtr->addr, handlePtr->pages*EMS_PAGE_SIZE);
 			handlePtr->addr = lowAddr;
 			}
 		lowAddr += handlePtr->pages*EMS_PAGE_SIZE;
@@ -172,14 +171,14 @@ Bit16u EMS_FreeKBs()
 
 static Bit8u EMS_AllocateMemory(Bit16u pages, Bit16u & dhandle)
 	{
-	if (!pages)													// 0 page allocation no allowed
+	if (!pages)																		// 0 page allocation no allowed
 		return EMS_ZERO_PAGES;
 	Bit16u handle = 1;
-	while (ems_handles[handle].pages != NULL_PAGE)				// Any free handle?
+	while (ems_handles[handle].pages != NULL_PAGE)									// Any free handle?
 		if (++handle == EMS_HANDLES)
 			return EMS_OUT_OF_HANDLES;
 	Bit16u freePages = EMS_Defrag();
-	if (freePages < pages)										// Enough free pages?
+	if (freePages < pages)															// Enough free pages?
 		return EMS_OUT_OF_LOG;
 	ems_handles[handle].pages = pages;
 	ems_handles[handle].addr = TOT_MEM_BYTES-freePages*EMS_PAGE_SIZE;
@@ -190,11 +189,11 @@ static Bit8u EMS_AllocateMemory(Bit16u pages, Bit16u & dhandle)
 
 static Bit8u EMS_MapPage(Bitu phys_page, Bit16u handle, Bit16u log_page)
 	{
-	if (!ValidHandle(handle))									// Valid handle?
+	if (!ValidHandle(handle))														// Valid handle?
 		return EMS_INVALID_HANDLE;
-	if (phys_page >= EMS_MAX_PHYS)								// Valid physical page?
+	if (phys_page >= EMS_MAX_PHYS)													// Valid physical page?
 		return EMS_ILL_PHYS;
-	if (log_page >= ems_handles[handle].pages)					// Valid logical page?
+	if (log_page >= ems_handles[handle].pages)										// Valid logical page?
 		return EMS_LOG_OUT_RANGE;
 	
 	mappings[phys_page].handle = handle;
@@ -205,16 +204,16 @@ static Bit8u EMS_MapPage(Bitu phys_page, Bit16u handle, Bit16u log_page)
 
 static Bit8u EMS_ReleaseMemory(Bit16u handle)
 	{
-	if (!ValidHandle(handle))									// Check for valid handle
+	if (!ValidHandle(handle))														// Check for valid handle
 		return EMS_INVALID_HANDLE;
-	if (handle != 0)											// Not sure what to do with eventual refering page handle(s)
+	if (handle != 0)																// Not sure what to do with eventual refering page handle(s)
 		ems_handles[handle].pages = NULL_PAGE;
 	return EMS_NO_ERROR;
 	}
 
 static Bit8u EMS_SavePageMap(Bit16u handle)
 	{
-	if (!ValidHandle(handle))									// Check for valid handle
+	if (!ValidHandle(handle))														// Check for valid handle
 		return EMS_INVALID_HANDLE;
 	for (Bitu i = 0; i < EMS_MAX_PHYS; i++)
 		{
@@ -227,9 +226,9 @@ static Bit8u EMS_SavePageMap(Bit16u handle)
 
 static Bit8u EMS_RestorePageMap(Bit16u handle)
 	{
-	if (!ValidHandle(handle))									// Check for valid handle
+	if (!ValidHandle(handle))														// Check for valid handle
 		return EMS_INVALID_HANDLE;
-	if (!ems_handles[handle].saved_page_map)					// Check for previous save
+	if (!ems_handles[handle].saved_page_map)										// Check for previous save
 		return EMS_NO_SAVED_PAGE_MAP;
 	for (Bitu i = 0; i < EMS_MAX_PHYS; i++)
 		EMS_MapPage(i, ems_handles[handle].page_map[i].handle, ems_handles[handle].page_map[i].page);
@@ -243,8 +242,8 @@ static Bit8u EMS_GetPagesForAllHandles(PhysPt table, Bit16u & handles)
 		if (ems_handles[i].pages != NULL_PAGE)
 			{
 			handles++;
-			vPC_rStosw(table, i);
-			vPC_rStosw(table+2, ems_handles[i].pages);
+			Mem_Stosw(table, i);
+			Mem_Stosw(table+2, ems_handles[i].pages);
 			table += 4;
 			}
 	return EMS_NO_ERROR;
@@ -255,38 +254,38 @@ static Bitu INT67_Handler(void)
 	{
 	switch (reg_ah)
 		{
-	case 0x40:													// Get status
+	case 0x40:																		// Get status
 		reg_ah = EMS_NO_ERROR;	
 		break;
-	case 0x41:													// Get pageframe segment
+	case 0x41:																		// Get pageframe segment
 		reg_bx = EMS_PAGEFRAME;
 		reg_ah = EMS_NO_ERROR;
 		break;
-	case 0x42:													// Get number of pages 
+	case 0x42:																		// Get number of pages 
 		reg_bx = EMS_GetFreePages();
 		reg_dx = (TOT_MEM_KB-1024)/16;
 		reg_ah = EMS_NO_ERROR;
 		break;
-	case 0x43:													// Request handle and allocate pages
+	case 0x43:																		// Request handle and allocate pages
 		reg_ah = EMS_AllocateMemory(reg_bx, reg_dx);
 		break;
-	case 0x44:													// Map expanded memory page
+	case 0x44:																		// Map expanded memory page
 		reg_ah = EMS_MapPage(reg_al, reg_dx, reg_bx);
 		break;
-	case 0x45:													// Release handle and free pages
+	case 0x45:																		// Release handle and free pages
 		reg_ah = EMS_ReleaseMemory(reg_dx);
 		break;
-	case 0x46:													// Get EMS version
+	case 0x46:																		// Get EMS version
 		reg_al = EMS_VERSION;
 		reg_ah = EMS_NO_ERROR;
 		break;
-	case 0x47:													// Save page map
+	case 0x47:																		// Save page map
 		reg_ah = EMS_SavePageMap(reg_dx);
 		break;
-	case 0x48:													// Restore page map
+	case 0x48:																		// Restore page map
 		reg_ah = EMS_RestorePageMap(reg_dx);
 		break;
-	case 0x4b:													// Get handle count
+	case 0x4b:																		// Get handle count
 		reg_bx = 0;
 		for (Bitu i = 0; i < EMS_HANDLES; i++)
 			if (ems_handles[i].pages != NULL_PAGE)
@@ -294,7 +293,7 @@ static Bitu INT67_Handler(void)
 		reg_bx = 64;
 		reg_ah = EMS_NO_ERROR;
 		break;
-	case 0x4c:													// Get pages for one handle
+	case 0x4c:																		// Get pages for one handle
 		if (!ValidHandle(reg_dx))
 			{
 			reg_ah = EMS_INVALID_HANDLE;
@@ -303,7 +302,7 @@ static Bitu INT67_Handler(void)
 		reg_bx = ems_handles[reg_dx].pages;
 		reg_ah = EMS_NO_ERROR;
 		break;
-	case 0x4d:													// Get pages for all handles
+	case 0x4d:																		// Get pages for all handles
 		reg_ah = EMS_GetPagesForAllHandles(SegPhys(es)+reg_di, reg_bx);
 		break;
 	default:
@@ -315,21 +314,21 @@ static Bitu INT67_Handler(void)
 
 void EMS_Init()
 	{
-	if (ConfGetBool("ems"))										// For now steal all from XMS (including first 64MB) 
+	if (ConfGetBool("ems"))															// For now steal all from XMS (including first 64KB) 
 		{
 		EMS_present = true;
 		Bit16u freeXMS, handleXMS;
 		XMS_QueryFreeMemory(freeXMS);
 		XMS_AllocateMemory(freeXMS, handleXMS);					
-		Bit16u ems_baseseg = DOS_GetMemory(2);					// Request 32 bytes block from DOS
-		vPC_rBlockWrite(SegOff2Ptr(ems_baseseg, 0xa), "EMMXXXX0", 8);
-		Bitu call_int67 = CALLBACK_Allocate();
-		CALLBACK_Setup(call_int67, &INT67_Handler, CB_IRET, SegOff2Ptr(ems_baseseg, 4), "Int 67 EMS");
+		Bit16u ems_baseseg = DOS_GetPrivatMemory(2);								// Request 32 bytes block from DOS
+		Mem_CopyTo(SegOff2Ptr(ems_baseseg, 0xa), "EMMXXXX0", 8);
+		Bitu cbID = CALLBACK_Allocate();
+		CALLBACK_Setup(cbID, &INT67_Handler, CB_IRET, SegOff2Ptr(ems_baseseg, 4));	// Int 67 EMS
 		RealSetVec(0x67, SegOff2dWord(ems_baseseg, 4));
 	
-		DOS_AddDevice(new device_EMM());						// Register the EMS device
+		DOS_AddDevice(new device_EMM());											// Register the EMS device
 		ems_handles[0].pages = 0;
-		for (int i = 1; i < EMS_HANDLES; i++)					// Clear handle and page tables
+		for (int i = 1; i < EMS_HANDLES; i++)										// Clear handle and page tables
 			ems_handles[i].pages = NULL_PAGE;
 		for (int i = 0; i < EMS_MAX_PHYS; i++)
 			{

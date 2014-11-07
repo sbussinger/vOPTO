@@ -50,54 +50,43 @@ CPU_Decoder * cpudecoder;
 void Descriptor::Load(PhysPt address)
 	{
 	Bit32u* data = (Bit32u*)&saved;
-	*data = vPC_rLodsd(address);
-	*(data+1) = vPC_rLodsd(address+4);
+	*data = Mem_Lodsd(address);
+	*(data+1) = Mem_Lodsd(address+4);
 	}
 
 void Descriptor:: Save(PhysPt address)
 	{
 	Bit32u* data = (Bit32u*)&saved;
-	vPC_rStosd(address, *data);
-	vPC_rStosd(address+4, *(data+1));
+	Mem_Stosd(address, *data);
+	Mem_Stosd(address+4, *(data+1));
 	}
 
 void CPU_Push16(Bitu value)
 	{
 	Bit32u new_esp = (reg_esp&cpu.stack.notmask)|((reg_esp-2)&cpu.stack.mask);
-	vPC_rStosw(SegPhys(ss) + (new_esp & cpu.stack.mask), value);
+	Mem_Stosw(SegPhys(ss) + (new_esp & cpu.stack.mask), value);
 	reg_esp = new_esp;
 	}
 
 void CPU_Push32(Bitu value)
 	{
 	Bit32u new_esp = (reg_esp&cpu.stack.notmask)|((reg_esp-4)&cpu.stack.mask);
-	vPC_rStosd(SegPhys(ss) + (new_esp & cpu.stack.mask), value);
+	Mem_Stosd(SegPhys(ss) + (new_esp & cpu.stack.mask), value);
 	reg_esp = new_esp;
 	}
 
 Bitu CPU_Pop16(void)
 	{
-	Bitu val = vPC_rLodsw(SegPhys(ss) + (reg_esp & cpu.stack.mask));
+	Bitu val = Mem_Lodsw(SegPhys(ss) + (reg_esp & cpu.stack.mask));
 	reg_esp = (reg_esp&cpu.stack.notmask)|((reg_esp+2)&cpu.stack.mask);
 	return val;
 	}
 
 Bitu CPU_Pop32(void)
 	{
-	Bitu val = vPC_rLodsd(SegPhys(ss) + (reg_esp & cpu.stack.mask));
+	Bitu val = Mem_Lodsd(SegPhys(ss) + (reg_esp & cpu.stack.mask));
 	reg_esp = (reg_esp&cpu.stack.notmask)|((reg_esp+4)&cpu.stack.mask);
 	return val;
-	}
-
-PhysPt SelBase(Bitu sel)
-	{
-	if (cpu.cr0 & CR0_PROTECTION)
-		{
-		Descriptor desc;
-		cpu.gdt.GetDescriptor(sel, desc);
-		return desc.GetBase();
-		}
-	return sel<<4;
 	}
 
 void CPU_SetFlags(Bitu word, Bitu mask)
@@ -243,7 +232,7 @@ public:
 		}
 	Bitu Get_back(void)
 		{
-		Bit16u backlink = vPC_rLodsw(base);
+		Bit16u backlink = Mem_Lodsw(base);
 		return backlink;
 		}
 	void SaveSelector(void)
@@ -255,14 +244,14 @@ public:
 		if (is386)
 			{
 			PhysPt where = base+offsetof(TSS_32, esp0)+level*8;
-			_esp = vPC_rLodsd(where);
-			_ss = vPC_rLodsw(where+4);
+			_esp = Mem_Lodsd(where);
+			_ss = Mem_Lodsw(where+4);
 			}
 		else
 			{
 			PhysPt where = base+offsetof(TSS_16, sp0)+level*4;
-			_esp = vPC_rLodsw(where);
-			_ss = vPC_rLodsw(where+2);
+			_esp = Mem_Lodsw(where);
+			_ss = Mem_Lodsw(where+2);
 			}
 		}
 	bool SetSelector(Bitu new_sel)
@@ -317,11 +306,11 @@ bool CPU_IO_Exception(Bitu port, Bitu size)
 		if (!cpu_tss.is386)
 			goto doexception;
 		PhysPt bwhere = cpu_tss.base+0x66;
-		Bitu ofs = vPC_rLodsw(bwhere);
+		Bitu ofs = Mem_Lodsw(bwhere);
 		if (ofs > cpu_tss.limit)
 			goto doexception;
 		bwhere = cpu_tss.base+ofs+(port/8);
-		Bitu map = vPC_rLodsw(bwhere);
+		Bitu map = Mem_Lodsw(bwhere);
 		Bitu mask = (0xffff>>(16-size)) << (port&7);
 		if (map & mask)
 			goto doexception;
@@ -353,8 +342,8 @@ void CPU_Interrupt(Bitu num, Bitu type, Bitu oldeip)
 		SETFLAGBIT(TF, false);
 		// Get the new CS:IP from vector table
 		PhysPt base = cpu.idt.GetBase();
-		reg_eip = vPC_rLodsw(base+(num << 2));
-		Segs.val[cs] = vPC_rLodsw(base+(num << 2)+2);
+		reg_eip = Mem_Lodsw(base+(num << 2));
+		Segs.val[cs] = Mem_Lodsw(base+(num << 2)+2);
 		Segs.phys[cs] = Segs.val[cs]<<4;
 		cpu.code.big = false;
 		return;
@@ -523,20 +512,20 @@ void CPU_IRET(bool use32, Bitu oldeip)
 	Bit32u tempesp;
 	if (use32)
 		{
-		n_eip = vPC_rLodsd(SegPhys(ss) + (reg_esp & cpu.stack.mask));
+		n_eip = Mem_Lodsd(SegPhys(ss) + (reg_esp & cpu.stack.mask));
 		tempesp = (reg_esp&cpu.stack.notmask)|((reg_esp+4)&cpu.stack.mask);
-		n_cs_sel = vPC_rLodsd(SegPhys(ss) + (tempesp & cpu.stack.mask)) & 0xffff;
+		n_cs_sel = Mem_Lodsd(SegPhys(ss) + (tempesp & cpu.stack.mask)) & 0xffff;
 		tempesp = (tempesp&cpu.stack.notmask)|((tempesp+4)&cpu.stack.mask);
-		n_flags = vPC_rLodsd(SegPhys(ss) + (tempesp & cpu.stack.mask));
+		n_flags = Mem_Lodsd(SegPhys(ss) + (tempesp & cpu.stack.mask));
 		tempesp = (tempesp&cpu.stack.notmask)|((tempesp+4)&cpu.stack.mask);
 		}
 	else
 		{
-		n_eip = vPC_rLodsw(SegPhys(ss) + (reg_esp & cpu.stack.mask));
+		n_eip = Mem_Lodsw(SegPhys(ss) + (reg_esp & cpu.stack.mask));
 		tempesp = (reg_esp&cpu.stack.notmask)|((reg_esp+2)&cpu.stack.mask);
-		n_cs_sel = vPC_rLodsw(SegPhys(ss) + (tempesp & cpu.stack.mask));
+		n_cs_sel = Mem_Lodsw(SegPhys(ss) + (tempesp & cpu.stack.mask));
 		tempesp = (tempesp&cpu.stack.notmask)|((tempesp+2)&cpu.stack.mask);
-		n_flags = vPC_rLodsw(SegPhys(ss) + (tempesp & cpu.stack.mask));
+		n_flags = Mem_Lodsw(SegPhys(ss) + (tempesp & cpu.stack.mask));
 		n_flags|=(reg_flags & 0xffff0000);
 		tempesp=(tempesp&cpu.stack.notmask)|((tempesp+2)&cpu.stack.mask);
 		}
@@ -583,15 +572,15 @@ void CPU_IRET(bool use32, Bitu oldeip)
 		Bitu n_ss,n_esp;
 		if (use32)
 			{
-			n_esp = vPC_rLodsd(SegPhys(ss) + (tempesp & cpu.stack.mask));
+			n_esp = Mem_Lodsd(SegPhys(ss) + (tempesp & cpu.stack.mask));
 			tempesp = (tempesp&cpu.stack.notmask)|((tempesp+4)&cpu.stack.mask);
-			n_ss = vPC_rLodsd(SegPhys(ss) + (tempesp & cpu.stack.mask)) & 0xffff;
+			n_ss = Mem_Lodsd(SegPhys(ss) + (tempesp & cpu.stack.mask)) & 0xffff;
 			}
 		else
 			{
-			n_esp = vPC_rLodsw(SegPhys(ss) + (tempesp & cpu.stack.mask));
+			n_esp = Mem_Lodsw(SegPhys(ss) + (tempesp & cpu.stack.mask));
 			tempesp = (tempesp&cpu.stack.notmask)|((tempesp+2)&cpu.stack.mask);
-			n_ss = vPC_rLodsw(SegPhys(ss) + (tempesp & cpu.stack.mask));
+			n_ss = Mem_Lodsw(SegPhys(ss) + (tempesp & cpu.stack.mask));
 			}
 		CPU_CHECK_COND((n_ss & 0xfffc)==0, "IRET:Outer level:SS selector zero", EXCEPTION_GP,0)
 		CPU_CHECK_COND((n_ss & 3)!=n_cs_rpl, "IRET:Outer level:SS rpl!=CS rpl", EXCEPTION_GP,n_ss & 0xfffc)
@@ -803,10 +792,10 @@ call_code:
 					{
 					if (call.Type() == DESC_386_CALL_GATE)
 						for (Bits i = (call.saved.gate.paramcount&31)-1; i >= 0; i--) 
-							vPC_rLodsd(o_stack+i*4);
+							Mem_Lodsd(o_stack+i*4);
 					else
 						for (Bits i = (call.saved.gate.paramcount&31)-1; i >= 0; i--)
-							vPC_rLodsw(o_stack+i*2);
+							Mem_Lodsw(o_stack+i*2);
 					}
 
 				// commit point
@@ -842,7 +831,7 @@ call_code:
 					CPU_Push32(o_esp);
 					if (call.saved.gate.paramcount&31)
 						for (Bits i = (call.saved.gate.paramcount&31)-1; i >= 0; i--) 
-							CPU_Push32(vPC_rLodsd(o_stack+i*4));
+							CPU_Push32(Mem_Lodsd(o_stack+i*4));
 					CPU_Push32(oldcs);
 					CPU_Push32(oldeip);
 					}
@@ -852,7 +841,7 @@ call_code:
 					CPU_Push16(o_esp);
 					if (call.saved.gate.paramcount&31)
 						for (Bits i = (call.saved.gate.paramcount&31)-1; i >= 0; i--)
-							CPU_Push16(vPC_rLodsw(o_stack+i*2));
+							CPU_Push16(Mem_Lodsw(o_stack+i*2));
 					CPU_Push16(oldcs);
 					CPU_Push16(oldeip);
 					}
@@ -918,9 +907,9 @@ void CPU_RET(bool use32, Bitu bytes, Bitu oldeip)
 		}
 	Bitu offset,selector;
 	if (!use32)
-		selector = vPC_rLodsw(SegPhys(ss) + (reg_esp & cpu.stack.mask) + 2);
+		selector = Mem_Lodsw(SegPhys(ss) + (reg_esp & cpu.stack.mask) + 2);
 	else
-		selector = vPC_rLodsd(SegPhys(ss) + (reg_esp & cpu.stack.mask) + 4) & 0xffff;
+		selector = Mem_Lodsd(SegPhys(ss) + (reg_esp & cpu.stack.mask) + 4) & 0xffff;
 	Descriptor desc;
 	Bitu rpl = selector & 3;
 	if (rpl < cpu.cpl)
@@ -1575,7 +1564,7 @@ bool CPU_SetSegGeneral(SegNames seg, Bitu value)
 
 bool CPU_PopSeg(SegNames seg, bool use32)
 	{
-	Bitu val = vPC_rLodsw(SegPhys(ss) + (reg_esp & cpu.stack.mask));
+	Bitu val = Mem_Lodsw(SegPhys(ss) + (reg_esp & cpu.stack.mask));
 	if (CPU_SetSegGeneral(seg, val))
 		return true;
 	Bitu addsp = use32 ? 0x04 : 0x02;
@@ -1616,7 +1605,7 @@ void CPU_ENTER(bool use32, Bitu bytes, Bitu level)
 	if (!use32)
 		{
 		sp_index -= 2;
-		vPC_rStosw(SegPhys(ss)+sp_index, reg_bp);
+		Mem_Stosw(SegPhys(ss)+sp_index, reg_bp);
 		reg_bp = (Bit16u)(reg_esp-2);
 		if (level)
 			{
@@ -1624,16 +1613,16 @@ void CPU_ENTER(bool use32, Bitu bytes, Bitu level)
 				{	
 				sp_index -= 2;
 				bp_index -= 2;
-				vPC_rStosw(SegPhys(ss)+sp_index, vPC_rLodsw(SegPhys(ss)+bp_index));
+				Mem_Stosw(SegPhys(ss)+sp_index, Mem_Lodsw(SegPhys(ss)+bp_index));
 				}
 			sp_index -= 2;
-			vPC_rStosw(SegPhys(ss)+sp_index, reg_bp);
+			Mem_Stosw(SegPhys(ss)+sp_index, reg_bp);
 			}
 		}
 	else
 		{
 		sp_index -= 4;
-        vPC_rStosd(SegPhys(ss)+sp_index, reg_ebp);
+        Mem_Stosd(SegPhys(ss)+sp_index, reg_ebp);
 		reg_ebp = (reg_esp-4);
 		if (level)
 			{
@@ -1641,10 +1630,10 @@ void CPU_ENTER(bool use32, Bitu bytes, Bitu level)
 				{	
 				sp_index -= 4;
 				bp_index -= 4;
-				vPC_rStosd(SegPhys(ss)+sp_index, vPC_rLodsd(SegPhys(ss)+bp_index));
+				Mem_Stosd(SegPhys(ss)+sp_index, Mem_Lodsd(SegPhys(ss)+bp_index));
 				}
 			sp_index -= 4;
-			vPC_rStosd(SegPhys(ss)+sp_index, reg_ebp);
+			Mem_Stosd(SegPhys(ss)+sp_index, reg_ebp);
 			}
 		}
 	sp_index -= bytes;

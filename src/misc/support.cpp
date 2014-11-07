@@ -33,52 +33,40 @@ Bit16u cpMap[256] = {
 	};
 
 
-int Unicode2Ascii(Bit16u *unicode, Bit8u *ascii, int maxLength)		// Unicode is exspected to end with 0, the number of translated characters (length of ascii) is returned
+int Unicode2Ascii(Bit16u *unicode, Bit8u *ascii, int maxLength)						// Unicode is exspected to end with 0, the number of translated characters (length of ascii) is returned
 	{
 	int	translated;
 	for (translated = 0; translated < maxLength && *unicode; translated++)
 		{
-		if (*unicode >= 0x20 && *unicode <= 0x7e)					// These are equal and most frequent
+		if (*unicode >= 0x20 && *unicode <= 0x7e)									// These are equal and most frequent
 			ascii[translated] = *((Bit8u *)unicode);
-		else if (*unicode == 9)										// Tab -> tab
+		else if (*unicode == 9)														// Tab -> tab
 			ascii[translated] = 9;
-		else if (*unicode == 13)									// Return -> return
+		else if (*unicode == 13)													// Return -> return
 			{
 			ascii[translated] = 13;
-			if (unicode[1] == 10)									// Linefeed, but that should always come after return
+			if (unicode[1] == 10)													// Linefeed, but that should always come after return
 				unicode++;
 			}
-		else														// Try to translate remaining Unicode values to ASCII
-			{														// So Unicode = ASCII 0-31 are dropped, doesn't make sense for text pasting?
+		else																		// Try to translate remaining Unicode values to ASCII
+			{																		// So Unicode = ASCII 0-31 are dropped, doesn't make sense for text pasting?
 			bool done = false;
-			for (int j = 0x7f; j < 256; j++)						// Slow, but not important 
+			for (int j = 0x7f; j < 256; j++)										// Slow, but not important 
 				if (*unicode == cpMap[j])
 					{
 					ascii[translated] = j;
 					done = true;
 					break;
 					}
-			if (!done)												// If no match found, let Windows try to substitute
+			if (!done)																// If no match found, let Windows try to substitute
 				if (WideCharToMultiByte(CP_OEMCP, 0, (LPCWSTR)unicode, 1, (LPSTR)(ascii+translated), 1, "\x7f", NULL) != 1 || ascii[translated] > 127)
-					ascii[translated] = 127;						// Overkill? But we certainly don't want an ANSI > 127 as ASCII, WideCharToMultiByte() converts to ANSI
+					ascii[translated] = 127;										// Overkill? But we certainly don't want an ANSI > 127 as ASCII, WideCharToMultiByte() converts to ANSI
 			}
 		unicode++;
 		}
 	return translated;
 	}
 
-void upcase(std::string &str)
-	{
-	int (*tf)(int) = std::toupper;
-	std::transform(str.begin(), str.end(), str.begin(), tf);
-	}
-
-void lowcase(std::string &str)
-	{
-	int (*tf)(int) = std::tolower;
-	std::transform(str.begin(), str.end(), str.begin(), tf);
-	}
- 
 char *lTrim(char *str)
 	{ 
 	while (isspace(*str))
@@ -107,18 +95,10 @@ char *lrTrim(char *str)
 	return lTrim(rTrim(str));
 	}
 
-char * upcase(char * str)
+void upcase(char * str)
 	{
-    for (char* idx = str; *idx; idx++)
+   for (char* idx = str; *idx; idx++)
 		*idx = toupper(*reinterpret_cast<unsigned char*>(idx));
-    return str;
-	}
-
-char * lowcase(char * str)
-	{
-	for (char* idx = str; *idx; idx++)
-		*idx = tolower(*reinterpret_cast<unsigned char*>(idx));
-	return str;
 	}
 
 bool ScanCMDBool(char * cmd, char const * const check)
