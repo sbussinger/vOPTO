@@ -15,4 +15,7 @@ This fork tracks the master source code of the vDos project and adds several fea
 #### bootdrive
 This branch adds the ability to change the internal boot drive of vDos from Z: to another drive letter.
 
+#### mailslots
+This branch adds the DOS Mailslot API's to vDos.
+
 ### Project Notes

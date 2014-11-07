@@ -28,6 +28,11 @@ enum {
 	DOS_ATTR_DEVICE=	0x40
 };
 
+struct s_mailbox_Data {
+	      HANDLE hBox;
+		  Bit16u BufOff,BufSeg,TimeOut,MessageSize,BufSize;
+       };
+       
 class DOS_DTA;
 
 class DOS_File
