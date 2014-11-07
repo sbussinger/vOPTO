@@ -292,6 +292,7 @@ void vDOS_Init(void)
 	ConfAddBool("frame", false);
 	ConfAddString("font", "");
 	ConfAddString("wp", "");
+	ConfAddString("bootdrive", "Z");
 	ParseConfigFile();
 
 	GUI_StartUp();
