@@ -1338,5 +1338,5 @@ void DOS_SetupFiles(void)
 	// Setup the Virtual Disk System
 	for (Bit32u i = 0; i < DOS_DRIVES-1; i++)
 		Drives[i] = 0;
-	Drives[DOS_DRIVES-1] = new Virtual_Drive();
+	Drives[DOSBOX_DRIVE_INT] = new Virtual_Drive();
 	}

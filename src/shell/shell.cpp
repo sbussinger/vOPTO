@@ -7,7 +7,7 @@
 #include "shell.h"
 #include "callback.h"
 #include "support.h"
-
+#include "dos_system.h"
 #include "mouse.h"
 
 Bitu call_shellstop;
@@ -328,6 +328,10 @@ void SHELL_Init()
 	
 	// Setup environment
 	char env[] = "PROMPT=$P$G\0PATH=Z:\\\0COMSPEC=Z:\\COMMAND.COM\0\0\1\0Z:\\COMMAND.COM\0";
+	// fix boot drive letter in environment string (change Z: to DOSBOX_DRIVE_CHAR
+	for (int i=0;i<sizeof(env);i++) { // this is the simplest way to fix this
+		if (env[i] == 'Z') { env[i] = DOSBOX_DRIVE_CHAR; }
+	}
 	vPC_rBlockWrite(SegOff2Ptr(env_seg, 0), env, sizeof(env));
 
 	DOS_PSP psp(psp_seg);

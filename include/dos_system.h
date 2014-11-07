@@ -13,6 +13,10 @@
 #include "mem.h"
 #endif
 
+// Internal Boot Drive
+#define DOSBOX_DRIVE_CHAR 'A'
+#define DOSBOX_DRIVE_INT (DOSBOX_DRIVE_CHAR - 'A')
+
 #define DOS_NAMELENGTH 12
 #define DOS_NAMELENGTH_ASCII (DOS_NAMELENGTH+1)
 #define DOS_FCBNAME 15
