@@ -1,0 +1,16 @@
+@echo off
+rem enkel z: (opstartschijf/command.com) is in eerste instantie beschikbaar
+rem use <schijfletter:> <Windows directory>
+use d: d:\
+rem use f: f:\
+rem use c: d:\
+rem use c: d:\DOS-C\
+
+rem f:
+rem cd exact70
+
+d:
+cd fiad.eur
+fiad
+exit
+
