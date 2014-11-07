@@ -145,7 +145,7 @@ bool device_CON::Write(Bit8u* data, Bit16u* size)
 			continue;
 			}
 		// ansi.esc and ansi.sci are true
-		Bit8u page = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
+		Bit8u page = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
 		switch (data[count])
 			{
 		case '0':	case '1':	case '2':	case '3':	case '4':	case '5':	case '6':	case '7':	case '8':	case '9':
@@ -351,21 +351,21 @@ void device_CON::Close()
 
 Bit16u device_CON::GetInformation(void)
 	{
-	Bit16u head = vPC_rLodsw(BIOS_KEYBOARD_BUFFER_HEAD);
-	Bit16u tail = vPC_rLodsw(BIOS_KEYBOARD_BUFFER_TAIL);
+	Bit16u head = Mem_aLodsw(BIOS_KEYBOARD_BUFFER_HEAD);							// aLodsw to prevent parachute hide window to kick in
+	Bit16u tail = Mem_aLodsw(BIOS_KEYBOARD_BUFFER_TAIL);
 
 	if ((head == tail) && !readcache)
 		return 0x80D3;	// No Key Available
-	if (readcache || vPC_rLodsw(0x40,head))
+	if (readcache || Mem_Lodsw(0x40,head))
 		return 0x8093;	// Key Available
 
 	/* remove the zero from keyboard buffer */
-	Bit16u start = vPC_rLodsw(BIOS_KEYBOARD_BUFFER_START);
-	Bit16u end = vPC_rLodsw(BIOS_KEYBOARD_BUFFER_END);
+	Bit16u start = Mem_Lodsw(BIOS_KEYBOARD_BUFFER_START);
+	Bit16u end = Mem_Lodsw(BIOS_KEYBOARD_BUFFER_END);
 	head += 2;
 	if (head >= end)
 		head = start;
-	vPC_rStosw(BIOS_KEYBOARD_BUFFER_HEAD, head);
+	Mem_Stosw(BIOS_KEYBOARD_BUFFER_HEAD, head);
 	return 0x80D3;	// No Key Available
 	}
 
@@ -376,8 +376,8 @@ device_CON::device_CON()
 	lastwrite = 0;
 	ansi.enabled = false;
 	ansi.attr = 0x7;
-	ansi.ncols = vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_NB_COLS);		//should be updated once set/reset mode is implemented
-	ansi.nrows = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_NB_ROWS) + 1;
+	ansi.ncols = Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_NB_COLS);		//should be updated once set/reset mode is implemented
+	ansi.nrows = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_NB_ROWS) + 1;
 	ansi.saverow = 0;
 	ansi.savecol = 0;
 	ClearAnsi();

@@ -51,8 +51,6 @@ void write_p3c0(Bitu /*port*/,Bitu val, Bitu iolen)
 		if (difference & 0x80)
 			for (Bit8u i = 0; i < 0x10; i++)
 				VGA_ATTR_SetPalette(i, vga.attr.palette[i]);
-		if (difference & 0x08)
-			VGA_SetBlinking(val & 0x8);
 		if (difference & 0x41)
 			VGA_DetermineMode();
 		/*
@@ -124,7 +122,6 @@ void write_p3c0(Bitu /*port*/,Bitu val, Bitu iolen)
 
 Bitu read_p3c1(Bitu /*port*/, Bitu iolen)
 	{
-//	vga.internal.attrindex=false;
 	if (attr(index) < 0x10)															// Palette
 		return attr(palette[attr(index)]);
 	switch (attr(index))
@@ -145,7 +142,7 @@ Bitu read_p3c1(Bitu /*port*/, Bitu iolen)
 
 void VGA_SetupAttr(void)
 	{
-	IO_RegisterWriteHandler(0x3c0, write_p3c0, IO_MB);
-	IO_RegisterReadHandler(0x3c0, read_p3c0, IO_MB);
-	IO_RegisterReadHandler(0x3c1, read_p3c1, IO_MB);
+	IO_RegisterWriteHandler(0x3c0, write_p3c0);
+	IO_RegisterReadHandler(0x3c0, read_p3c0);
+	IO_RegisterReadHandler(0x3c1, read_p3c1);
 	}

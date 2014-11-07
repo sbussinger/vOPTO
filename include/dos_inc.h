@@ -118,7 +118,9 @@ bool DOS_AllocateMemory(Bit16u * segment, Bit16u * blocks);
 bool DOS_ResizeMemory(Bit16u segment, Bit16u * blocks);
 bool DOS_FreeMemory(Bit16u segment);
 void DOS_FreeProcessMemory(Bit16u pspseg);
-Bit16u DOS_GetMemory(Bit16u pages);
+Bit16u DOS_GetPrivatMemory(Bit16u pages);
+bool DOS_FreePrivatMemory(Bit16u seg, Bit16u pages);
+
 bool DOS_SetMemAllocStrategy(Bit16u strat);
 Bit16u DOS_GetMemAllocStrategy(void);
 void DOS_BuildUMBChain(bool ems_active);
@@ -199,11 +201,11 @@ public:
 		switch (size)
 			{
 		case 1:
-			return vPC_rLodsb(pt+addr);
+			return Mem_Lodsb(pt+addr);
 		case 2:
-			return vPC_rLodsw(pt+addr);
+			return Mem_Lodsw(pt+addr);
 		case 4:
-			return vPC_rLodsd(pt+addr);
+			return Mem_Lodsd(pt+addr);
 			}
 		return 0;
 		}
@@ -212,13 +214,13 @@ public:
 		switch (size)
 			{
 		case 1:
-			vPC_rStosb(pt+addr, (Bit8u)val);
+			Mem_Stosb(pt+addr, (Bit8u)val);
 			break;
 		case 2:
-			vPC_rStosw(pt+addr, (Bit16u)val);
+			Mem_Stosw(pt+addr, (Bit16u)val);
 			break;
 		case 4:
-			vPC_rStosd(pt+addr, (Bit32u)val);
+			Mem_Stosd(pt+addr, (Bit32u)val);
 			break;
 			}
 		}
@@ -252,7 +254,7 @@ public:
 	void	SetSize				(Bit16u size)			{sSave(sPSP, next_seg, size);				};
 	Bit16u	GetSize				(void)					{return (Bit16u)sGet(sPSP, next_seg);		};
 	void	SetEnvironment		(Bit16u envseg)			{sSave(sPSP, environment, envseg);			};
-//	void	SetEnvironment		(Bit16u envseg)			{vPC_rStosw(pt+offsetof(sPSP,environment), envseg);		};
+//	void	SetEnvironment		(Bit16u envseg)			{Mem_Stosw(pt+offsetof(sPSP,environment), envseg);		};
 	Bit16u	GetEnvironment		(void)					{return (Bit16u)sGet(sPSP, environment);	};
 	Bit16u	GetSegment			(void)					{return seg;								};
 	void	SetFileHandle		(Bit16u index, Bit8u handle);
@@ -504,8 +506,8 @@ class DOS_MCB : public MemStruct
 public:
 	DOS_MCB(Bit16u seg) { SetPt(seg);}
 	void SetFileName(char const * const _name) { strncpy((char *)(MemBase+pt+offsetof(sMCB, filename)), _name, 8); }
-//	void SetFileName(char const * const _name) { vPC_rBlockWrite(pt+offsetof(sMCB, filename), _name, 8); }
-	void GetFileName(char * const _name) { vPC_rBlockRead(pt+offsetof(sMCB, filename), _name, 8); _name[8] = 0;}
+//	void SetFileName(char const * const _name) { Mem_CopyTo(pt+offsetof(sMCB, filename), _name, 8); }
+	void GetFileName(char * const _name) { Mem_CopyFrom(pt+offsetof(sMCB, filename), _name, 8); _name[8] = 0;}
 	void SetType(Bit8u _type) { sSave(sMCB, type, _type);}
 	void SetSize(Bit16u _size) { sSave(sMCB, size, _size);}
 	void SetPSPSeg(Bit16u _pspseg) { sSave(sMCB, psp_segment, _pspseg); if (_pspseg == MCB_FREE) SetFileName("        ");}

@@ -25,75 +25,75 @@ void INT10_SetupRomMemory(void)
 	{
 	// This should fill up certain structures inside the Video Bios Rom Area
 	PhysPt rom_base = SegOff2Ptr(0xc000, 0);
-	vPC_aStosw(rom_base+0, 0xaa55);													// Set up the start of the ROM
-	vPC_aStosb(rom_base+2, 0x40);													// Size of ROM: 64 512-blocks = 32KB
-	phys_writes(rom_base+0x1e, "IBM compatible VGA BIOS", 24);
+	Mem_aStosw(rom_base+0, 0xaa55);													// Set up the start of the ROM
+	Mem_aStosb(rom_base+2, 0x40);													// Size of ROM: 64 512-blocks = 32KB
+	Mem_aWrites(rom_base+0x1e, "IBM compatible VGA BIOS", 24);
 	int10.rom.used = 0x100;
 
 	int10.rom.font_8_first = SegOff2dWord(0xC000, int10.rom.used);
 	int10.rom.font_8_second = int10.rom.font_8_first+1024;
-	phys_writes(rom_base+int10.rom.used, (const char*)int10_font_08, sizeof(int10_font_08));
+	Mem_aWrites(rom_base+int10.rom.used, (const char*)int10_font_08, sizeof(int10_font_08));
 	int10.rom.used += 2048;
 
 	int10.rom.font_14 = SegOff2dWord(0xC000, int10.rom.used);
-	phys_writes(rom_base+int10.rom.used, (const char*)int10_font_14, 3584);
+	Mem_aWrites(rom_base+int10.rom.used, (const char*)int10_font_14, 3584);
 	int10.rom.used += 3584;
 
 	int10.rom.font_16 = SegOff2dWord(0xC000, int10.rom.used);
-	phys_writes(rom_base+int10.rom.used, (const char*)int10_font_16, 4096);
+	Mem_aWrites(rom_base+int10.rom.used, (const char*)int10_font_16, 4096);
 	int10.rom.used += 4096;
 
 	int10.rom.static_state = SegOff2dWord(0xC000, int10.rom.used);
 	for (Bitu i = 0; i < 16; i++)
-		vPC_aStosb(rom_base+int10.rom.used++, static_functionality[i]);
-	phys_writes(SegOff2Ptr(0xf000, 0xfa6e), (const char*)int10_font_08, 1024);
+		Mem_aStosb(rom_base+int10.rom.used++, static_functionality[i]);
+	Mem_aWrites(SegOff2Ptr(0xf000, 0xfa6e), (const char*)int10_font_08, 1024);
 
 	RealSetVec(0x1F, int10.rom.font_8_second);
 	int10.rom.font_14_alternate = SegOff2dWord(0xC000, int10.rom.used);
 	int10.rom.font_16_alternate = SegOff2dWord(0xC000, int10.rom.used);
-	vPC_aStosb(rom_base+int10.rom.used++, 0);										// End of table (empty)
+	Mem_aStosb(rom_base+int10.rom.used++, 0);										// End of table (empty)
 
 	int10.rom.video_parameter_table = SegOff2dWord(0xC000, int10.rom.used);
 	int10.rom.used += INT10_SetupVideoParameterTable(rom_base+int10.rom.used);
 
 	int10.rom.video_dcc_table = SegOff2dWord(0xC000, int10.rom.used);
-	vPC_aStosb(rom_base+int10.rom.used++, 16);										// Number of entries
-	vPC_aStosb(rom_base+int10.rom.used++, 1);										// Version number
-	vPC_aStosb(rom_base+int10.rom.used++, 8);										// Maximal display code
-	vPC_aStosb(rom_base+int10.rom.used++, 0);										// Reserved
+	Mem_aStosb(rom_base+int10.rom.used++, 16);										// Number of entries
+	Mem_aStosb(rom_base+int10.rom.used++, 1);										// Version number
+	Mem_aStosb(rom_base+int10.rom.used++, 8);										// Maximal display code
+	Mem_aStosb(rom_base+int10.rom.used++, 0);										// Reserved
 
 	static Bit16u combination_codes[0x10]=											// Display combination codes
 		{0, 0x0100, 0x0200, 0x0102, 0x0400, 0x0104, 0x0500, 0x0502, 0x0600, 0x0601, 0x0605, 0x0800, 0x0801, 0x0700, 0x0702, 0x0706};
-	phys_writes(rom_base+int10.rom.used, (const char*)combination_codes, 32);
+	Mem_aWrites(rom_base+int10.rom.used, (const char*)combination_codes, 32);
 	int10.rom.used += 32;
 
 	int10.rom.video_save_pointer_table = SegOff2dWord(0xC000, int10.rom.used);
-	vPC_aStosw(rom_base+int10.rom.used, 0x1a);										// Length of table
+	Mem_aStosw(rom_base+int10.rom.used, 0x1a);										// Length of table
 	int10.rom.used += 2;
 
-	vPC_aStosd(rom_base+int10.rom.used, int10.rom.video_dcc_table);
+	Mem_aStosd(rom_base+int10.rom.used, int10.rom.video_dcc_table);
 	int10.rom.used += 4;
 
 	for (Bitu i = 0; i < 5; i++)
 		{
-		vPC_aStosd(rom_base+int10.rom.used, 0);										// Alphanumeric charset override + user palette table
+		Mem_aStosd(rom_base+int10.rom.used, 0);										// Alphanumeric charset override + user palette table
 		int10.rom.used += 4;
 		}
 
 	int10.rom.video_save_pointers = SegOff2dWord(0xC000, int10.rom.used);
-	vPC_aStosd(rom_base+int10.rom.used, int10.rom.video_parameter_table);
+	Mem_aStosd(rom_base+int10.rom.used, int10.rom.video_parameter_table);
 	int10.rom.used += 4;
-	vPC_aStosd(rom_base+int10.rom.used, 0);											// Dynamic save area pointer
+	Mem_aStosd(rom_base+int10.rom.used, 0);											// Dynamic save area pointer
 	int10.rom.used += 4;
-	vPC_aStosd(rom_base+int10.rom.used, 0);											// Alphanumeric character set override
+	Mem_aStosd(rom_base+int10.rom.used, 0);											// Alphanumeric character set override
 	int10.rom.used += 4;
-	vPC_aStosd(rom_base+int10.rom.used, 0);											// Graphics character set override
+	Mem_aStosd(rom_base+int10.rom.used, 0);											// Graphics character set override
 	int10.rom.used += 4;
-	vPC_aStosd(rom_base+int10.rom.used, int10.rom.video_save_pointer_table);
+	Mem_aStosd(rom_base+int10.rom.used, int10.rom.video_save_pointer_table);
 	int10.rom.used += 4;
-	vPC_aStosd(rom_base+int10.rom.used, 0);
+	Mem_aStosd(rom_base+int10.rom.used, 0);
 	int10.rom.used += 4;
-	vPC_aStosd(rom_base+int10.rom.used, 0);
+	Mem_aStosd(rom_base+int10.rom.used, 0);
 	int10.rom.used += 4;
 
 	INT10_SetupBasicVideoParameterTable();
@@ -101,8 +101,8 @@ void INT10_SetupRomMemory(void)
 	Bit8u sum = 0;																	// Setup rom memory checksum, sum of all bytes in rom module 256 should be 0
 	Bitu last_rombyte = 32*1024 - 1;												// 32 KB romsize
 	for (Bitu i = 0; i < last_rombyte; i++)
-		sum += vPC_aLodsb(rom_base + i);											// Overflow is okay
-	vPC_aStosb(rom_base + last_rombyte, (256-sum)&0xff);
+		sum += Mem_aLodsb(rom_base + i);											// Overflow is okay
+	Mem_aStosb(rom_base + last_rombyte, (256-sum)&0xff);
 	}
 
 Bit8u int10_font_08[256 * 8] = {

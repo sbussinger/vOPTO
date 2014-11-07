@@ -45,12 +45,6 @@ void write_p3c5(Bitu /*port*/, Bitu val, Bitu iolen)
 	case 3:																			// Character map select
 		{
 		vga.seq.character_map_select = val;
-		Bit8u font1 = (val & 0x3) << 1;
-		font1 |= (val & 0x10) >> 4;
-		vga.draw.font_tables[0] = &vga.draw.font[font1*8*1024];
-		Bit8u font2 = ((val & 0xc) >> 1);
-		font2 |= (val & 0x20) >> 5;
-		vga.draw.font_tables[1] = &vga.draw.font[font2*8*1024];
 		}
 		/*
 			0,1,4  Selects VGA Character Map (0..7) if bit 3 of the character
@@ -70,12 +64,11 @@ void write_p3c5(Bitu /*port*/, Bitu val, Bitu iolen)
 			3  If set address bit 0-1 selects video memory planes (256 color mode),
 				rather than the Map Mask and Read Map Select Registers.
 		*/
-		vga.seq.memory_mode = val;
-		if (val&0x08)																// Changing this means changing the VGA memory read/write handler
-			vga.config.chained = true;
-		else
-			vga.config.chained = false;
-		VGA_SetupHandlers();
+		if (val != vga.seq.memory_mode)
+			{
+			vga.seq.memory_mode = val;
+			VGA_SetupHandlers();
+			}
 		break;
 		}
 	}
@@ -101,9 +94,9 @@ Bitu read_p3c5(Bitu /*port*/,Bitu iolen)
 
 void VGA_SetupSEQ(void)
 	{
-	IO_RegisterWriteHandler(0x3c4, write_p3c4, IO_MB);
-	IO_RegisterWriteHandler(0x3c5, write_p3c5, IO_MB);
-	IO_RegisterReadHandler(0x3c4, read_p3c4, IO_MB);
-	IO_RegisterReadHandler(0x3c5, read_p3c5, IO_MB);
+	IO_RegisterWriteHandler(0x3c4, write_p3c4);
+	IO_RegisterWriteHandler(0x3c5, write_p3c5);
+	IO_RegisterReadHandler(0x3c4, read_p3c4);
+	IO_RegisterReadHandler(0x3c5, read_p3c5);
 	}
 

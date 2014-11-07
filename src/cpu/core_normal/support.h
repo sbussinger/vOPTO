@@ -1,6 +1,6 @@
-#define LoadMbs(off) (Bit8s)(vPC_rLodsb(off))
-#define LoadMws(off) (Bit16s)(vPC_rLodsw(off))
-#define LoadMds(off) (Bit32s)(vPC_rLodsd(off))
+#define LoadMbs(off) (Bit8s)(Mem_Lodsb(off))
+#define LoadMws(off) (Bit16s)(Mem_Lodsw(off))
+#define LoadMds(off) (Bit32s)(Mem_Lodsd(off))
 
 #define LoadRb(reg) reg
 #define LoadRw(reg) reg
@@ -70,7 +70,7 @@ static inline Bit32s Fetchds()
 	{												\
 	GetRM;											\
 	if (rm >= 0xc0 ) {GetEArb;*earb=(cc) ? 1 : 0;}	\
-	else {GetEAa;SaveMb(eaa,(cc) ? 1 : 0);}			\
+	else {GetEAa;Mem_Stosb(eaa,(cc) ? 1 : 0);}		\
 	}
 
 #include "helpers.h"

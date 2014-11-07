@@ -108,8 +108,10 @@ Bit16u Virtual_File::GetInformation(void)
 Virtual_Drive::Virtual_Drive()
 	{
 	strcpy(info, "Reserved virtual bootdisk");
+	Mem_Stosb(dWord2Ptr(dos.tables.mediaid)+50, 0xf8);								// Set the correct media byte in the table (harddisk)
 	search_file = 0;
-	this->SetLabel("Z_Drive");
+	strcpy(label, "Z_Drive");
+	remote = false;
 	}
 
 bool Virtual_Drive::FileOpen(DOS_File* * file, char* name, Bit32u flags)
@@ -168,14 +170,14 @@ bool Virtual_Drive::FindFirst(char* _dir, DOS_DTA & dta, bool fcb_findfirst)
 	dta.GetSearchParams(attr, pattern);
 	if (attr == DOS_ATTR_VOLUME)
 		{
-		dta.SetResult("vDOS", 0, 0, 0, DOS_ATTR_VOLUME);
+		dta.SetResult(GetLabel(), 0, 0, 0, DOS_ATTR_VOLUME);
 		return true;
 		}
 	if ((attr & DOS_ATTR_VOLUME) && !fcb_findfirst)
 		{
-		if (WildFileCmp("vDOS", pattern))
+		if (WildFileCmp(GetLabel(), pattern))
 			{
-			dta.SetResult("vDOS", 0, 0, 0, DOS_ATTR_VOLUME);
+			dta.SetResult(GetLabel(), 0, 0, 0, DOS_ATTR_VOLUME);
 			return true;
 			}
 		}
@@ -219,16 +221,9 @@ bool Virtual_Drive::Rename(char* oldname, char * newname)
 
 bool Virtual_Drive::AllocationInfo(Bit16u* _bytes_sector, Bit8u* _sectors_cluster, Bit16u* _total_clusters, Bit16u* _free_clusters)
 	{
-	// Always report 0 bytes free
-	// Total size is always 1 gb
-	*_bytes_sector = 512;
-	*_sectors_cluster = 127;
-	*_total_clusters = 16513;
-	*_free_clusters = 0;
+	*_bytes_sector = 512;															// Total size is ~1,41 MB
+	*_sectors_cluster = 2;
+	*_total_clusters = 1440;
+	*_free_clusters = 0;															// Report 0 bytes free
 	return true;
-	}
-
-Bit8u Virtual_Drive::GetMediaByte(void)
-	{
-	return 0xF8;
 	}

@@ -57,6 +57,7 @@ public:
 	void CMD_MEM(char * args);
 	void CMD_USE(char * args);
 	void CMD_CALL(char * args);
+	void CMD_CHCP(char * args);
 	void CMD_CHDIR(char * args);
 	void CMD_CLS(char * args);
 	void CMD_COPY(char * args);

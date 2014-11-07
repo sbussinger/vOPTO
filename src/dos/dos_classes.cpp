@@ -39,8 +39,8 @@ void DOS_InfoBlock::SetLocation(Bit16u segment)
 	seg = segment;
 	pt = SegOff2Ptr(seg, 0);
 	// Clear the initial Block
-	vPC_rStoswb(pt, 0xffff, sizeof(sDIB));
-	vPC_rStoswb(pt, 0, 14);
+	Mem_rStosb(pt, 0xff, sizeof(sDIB));
+	Mem_rStosb(pt, 0, 14);
 
 	sSave(sDIB, regCXfrom5e, (Bit16u)0);
 	sSave(sDIB, countLRUcache, (Bit16u)0);
@@ -94,10 +94,10 @@ void DOS_InfoBlock::SetLocation(Bit16u segment)
 	// Create a fake SFT, so programs think there are 100 file handles
 	Bit16u sftOffset = offsetof(sDIB, firstFileTable)+0xa2;
 	sSave(sDIB, firstFileTable, SegOff2dWord(segment, sftOffset));
-	vPC_rStosd(segment, sftOffset+0x00, SegOff2dWord(segment+0x26, 0));	// Next File Table
-	vPC_rStosw(segment, sftOffset+0x04, 100);							// File Table supports 100 files
-	vPC_rStosd(segment+0x26, 0x00, 0xffffffff);							// Last File Table
-	vPC_rStosw(segment+0x26, 0x04, 100);								// File Table supports 100 files
+	Mem_Stosd(segment, sftOffset+0x00, SegOff2dWord(segment+0x26, 0));	// Next File Table
+	Mem_Stosw(segment, sftOffset+0x04, 100);							// File Table supports 100 files
+	Mem_Stosd(segment+0x26, 0x00, 0xffffffff);							// Last File Table
+	Mem_Stosw(segment+0x26, 0x04, 100);								// File Table supports 100 files
 	}
 
 void DOS_InfoBlock::SetFirstMCB(Bit16u _firstmcb)
@@ -174,7 +174,7 @@ void DOS_PSP::MakeNew(Bit16u mem_size)
 	// get previous
 //	DOS_PSP prevpsp(dos.psp());
 	// Clear it first
-	vPC_rStoswb(pt, 0, sizeof(sPSP));
+	Mem_rStosb(pt, 0, sizeof(sPSP));
 	// Set size
 	sSave(sPSP, next_seg, seg+mem_size);
 	// far call opcode
@@ -214,20 +214,20 @@ Bit8u DOS_PSP::GetFileHandle(Bit16u index)
 	{
 	if (index >= sGet(sPSP, max_files))
 		return 0xff;
-	return vPC_rLodsb(dWord2Ptr(sGet(sPSP, file_table))+index);
+	return Mem_Lodsb(dWord2Ptr(sGet(sPSP, file_table))+index);
 	}
 
 void DOS_PSP::SetFileHandle(Bit16u index, Bit8u handle)
 	{
 	if (index < sGet(sPSP, max_files))
-		vPC_rStosb(dWord2Ptr(sGet(sPSP, file_table))+index, handle);
+		Mem_Stosb(dWord2Ptr(sGet(sPSP, file_table))+index, handle);
 	}
 
 Bit16u DOS_PSP::FindFreeFileEntry(void)
 	{
 	PhysPt files = dWord2Ptr(sGet(sPSP, file_table));
 	for (Bit16u i = 0; i < sGet(sPSP, max_files); i++)
-		if (vPC_rLodsb(files+i) == 0xff)
+		if (Mem_Lodsb(files+i) == 0xff)
 			return i;
 	return 0xff;
 	}
@@ -236,7 +236,7 @@ Bit16u DOS_PSP::FindEntryByHandle(Bit8u handle)
 	{
 	PhysPt files = dWord2Ptr(sGet(sPSP, file_table));
 	for (Bit16u i = 0; i < sGet(sPSP, max_files); i++)
-		if (vPC_rLodsb(files+i) == handle)
+		if (Mem_Lodsb(files+i) == handle)
 			return i;
 	return 0xFF;
 	}
@@ -285,46 +285,49 @@ void DOS_PSP::RestoreVectors(void)
 void DOS_PSP::SetCommandTail(RealPt src)
 	{
 	if (src)	// valid source
-		{
-//		vPC_rMovsb(pt+offsetof(sPSP, cmdtail), dWord2Ptr(src), 128);
-		vPC_rMovsb(pt+offsetof(sPSP, cmdtail), dWord2Ptr(src), vPC_rLodsb(dWord2Ptr(src))+2);	// Terminating zero is already in place
-		}
+		Mem_rMovsb(pt+offsetof(sPSP, cmdtail), dWord2Ptr(src), Mem_Lodsb(dWord2Ptr(src))+2);	// Terminating zero is already in place
 	else
 		{		// empty
 		sSave(sPSP, cmdtail.count, 0x00);
-		vPC_rStosb(pt+offsetof(sPSP, cmdtail.buffer), 0x0d);
+		Mem_Stosb(pt+offsetof(sPSP, cmdtail.buffer), 0x0d);
 		}
 	}
 
 void DOS_PSP::SetFCB1(RealPt src)
 	{
 	if (src)
-		vPC_rMovsb(SegOff2Ptr(seg, offsetof(sPSP, fcb1)), dWord2Ptr(src), 16);
+		Mem_rMovsb(SegOff2Ptr(seg, offsetof(sPSP, fcb1)), dWord2Ptr(src), 16);
 	}
 
 void DOS_PSP::SetFCB2(RealPt src)
 	{
 	if (src)
-		vPC_rMovsb(SegOff2Ptr(seg, offsetof(sPSP, fcb2)), dWord2Ptr(src), 16);
+		Mem_rMovsb(SegOff2Ptr(seg, offsetof(sPSP, fcb2)), dWord2Ptr(src), 16);
 	}
 
 void DOS_PSP::SetNumFiles(Bit16u fileNum)
 	{
-	if (fileNum > 20)																// Allocate needed paragraphs
+	if (sGet(sPSP, max_files) < 20 || (sGet(sPSP, max_files) == 20 && sGet(sPSP, file_table)>>12 != pt) || (sGet(sPSP, max_files) > 20 && sGet(sPSP, file_table)>>12 == pt))
+		E_Exit("PSP file table (JFT) is messed up");
+	if (fileNum > 20)																// Setup a table to accomondate more than 20 file handles?
 		{
-		fileNum += 2;																// Add a few more files for safety
-		Bit16u para = (fileNum/16)+((fileNum%16) > 0);
-		RealPt data	= SegOff2dWord(DOS_GetMemory(para), 0);
-		sSave(sPSP, file_table, data);
-		sSave(sPSP, max_files, fileNum);
-		Bit16u i;
-		for (i = 0; i < 20; i++)
-			SetFileHandle(i, (Bit8u)sGet(sPSP, files[i]));
-		for (i = 20; i < fileNum; i++)
-			SetFileHandle(i, 0xFF);
+		if (sGet(sPSP, max_files) > 20)												// Already peviously done, do nothing
+			return;
+		Bit16u new_table = DOS_GetPrivatMemory(16);									// Allocate 16 para's, maximize to 255 file handles to prevent DOS memory leaking with subsequent calls
+		Mem_rStosb(new_table<<4, 0xff, 256);										// Init all to unused
+		Mem_rMovsb(new_table<<4, dWord2Ptr(sGet(sPSP, file_table)), 20);			// Copy 20 entries of PSP
+		sSave(sPSP, file_table, SegOff2dWord(new_table, 0));						// Store new file table address
+		sSave(sPSP, max_files, fileNum);											// And max open files
 		}
-	else
-		sSave(sPSP, max_files, fileNum);
+	else if (sGet(sPSP, max_files) == 20)											// New file handles <= 20 and PSP in use, nothing to do
+		return;
+	else																			// We should test if none of the 20+ entries is in use
+		{																			// Returning error 4, but leave this responsibility to the caller
+		Mem_rMovsb(pt+0x18, dWord2Ptr(sGet(sPSP, file_table)), 20);					// Copy first 20 entries back to PSP
+		DOS_FreePrivatMemory(sGet(sPSP, file_table)>>16, 16);						// Try to release allocated memroyblock of extended file table
+		sSave(sPSP, file_table, (pt<<12)+0x18);										// Restore file table address to PSP
+		sSave(sPSP, max_files, 20);													// Max entries is always 20!
+		}
 	}
 
 void DOS_DTA::SetupSearch(Bit8u _sdrive, Bit8u _sattr, char * pattern)
@@ -332,23 +335,23 @@ void DOS_DTA::SetupSearch(Bit8u _sdrive, Bit8u _sattr, char * pattern)
 	sSave(sDTA, sdrive, _sdrive);
 	sSave(sDTA, sattr, _sattr);
 	// Fill with spaces
-	vPC_rStoswb(pt+offsetof(sDTA, sname), 0x2020, 11);
+	Mem_rStosb(pt+offsetof(sDTA, sname), 0x20, 11);
 	if (char * find_ext = strchr(pattern, '.'))
 		{
 		Bitu size = (Bitu)(find_ext-pattern);
 		if (size > 8)
 			size = 8;
-		vPC_rBlockWrite(pt+offsetof(sDTA, sname), pattern, size);
+		Mem_CopyTo(pt+offsetof(sDTA, sname), pattern, size);
 		find_ext++;
-		vPC_rBlockWrite(pt+offsetof(sDTA, sext), find_ext, (strlen(find_ext) > 3) ? 3 : (Bitu)strlen(find_ext));
+		Mem_CopyTo(pt+offsetof(sDTA, sext), find_ext, (strlen(find_ext) > 3) ? 3 : (Bitu)strlen(find_ext));
 		}
 	else
-		vPC_rBlockWrite(pt+offsetof(sDTA, sname), pattern, (strlen(pattern) > 8) ? 8 : (Bitu)strlen(pattern));
+		Mem_CopyTo(pt+offsetof(sDTA, sname), pattern, (strlen(pattern) > 8) ? 8 : (Bitu)strlen(pattern));
 	}
 
 void DOS_DTA::SetResult(const char * _name, Bit32u _size, Bit16u _date, Bit16u _time, Bit8u _attr)
 	{
-	vPC_rBlockWrite(pt+offsetof(sDTA, name), (void *)_name,DOS_NAMELENGTH_ASCII);
+	Mem_CopyTo(pt+offsetof(sDTA, name), (void *)_name,DOS_NAMELENGTH_ASCII);
 	sSave(sDTA, size, _size);
 	sSave(sDTA, date, _date);
 	sSave(sDTA, time, _time);
@@ -357,7 +360,7 @@ void DOS_DTA::SetResult(const char * _name, Bit32u _size, Bit16u _date, Bit16u _
 
 void DOS_DTA::GetResult(char * _name, Bit32u & _size, Bit16u & _date, Bit16u & _time, Bit8u & _attr)
 	{
-	vPC_rBlockRead(pt+offsetof(sDTA, name), _name, DOS_NAMELENGTH_ASCII);
+	Mem_CopyFrom(pt+offsetof(sDTA, name), _name, DOS_NAMELENGTH_ASCII);
 	_size = sGet(sDTA, size);
 	_date = (Bit16u)sGet(sDTA, date);
 	_time = (Bit16u)sGet(sDTA, time);
@@ -373,7 +376,7 @@ void DOS_DTA::GetSearchParams(Bit8u & attr, char * pattern)
 	{
 	attr = (Bit8u)sGet(sDTA, sattr);
 	char temp[11];
-	vPC_rBlockRead(pt+offsetof(sDTA, sname), temp, 11);
+	Mem_CopyFrom(pt+offsetof(sDTA, sname), temp, 11);
 	memcpy(pattern, temp, 8);
 	pattern[8] = '.';
 	memcpy(&pattern[9], &temp[8], 3);
@@ -400,11 +403,11 @@ bool DOS_FCB::Extended(void)
 
 void DOS_FCB::Create(bool _extended)
 	{
-	vPC_rStoswb(real_pt, 0, _extended ? 36+7: 36);
+	Mem_rStosb(real_pt, 0, _extended ? 36+7: 36);
 	pt = real_pt;
 	if (_extended)
 		{
-		vPC_rStosb(real_pt, 0xff);
+		Mem_Stosb(real_pt, 0xff);
 		pt += 7;
 		}
 	extended = _extended;
@@ -413,8 +416,8 @@ void DOS_FCB::Create(bool _extended)
 void DOS_FCB::SetName(Bit8u _drive, char * _fname, char * _ext)
 	{
 	sSave(sFCB,drive, _drive);
-	vPC_rBlockWrite(pt+offsetof(sFCB, filename), _fname, 8);
-	vPC_rBlockWrite(pt+offsetof(sFCB, ext), _ext, 3);
+	Mem_CopyTo(pt+offsetof(sFCB, filename), _fname, 8);
+	Mem_CopyTo(pt+offsetof(sFCB, ext), _ext, 3);
 	}
 
 void DOS_FCB::SetSizeDateTime(Bit32u _size, Bit16u _date, Bit16u _time)
@@ -503,27 +506,27 @@ void DOS_FCB::GetName(char * fillname)
 	{
 	fillname[0] = GetDrive()+'A';
 	fillname[1] = ':';
-	vPC_rBlockRead(pt+offsetof(sFCB, filename), &fillname[2], 8);
+	Mem_CopyFrom(pt+offsetof(sFCB, filename), &fillname[2], 8);
 	fillname[10] = '.';
-	vPC_rBlockRead(pt+offsetof(sFCB, ext), &fillname[11], 3);
+	Mem_CopyFrom(pt+offsetof(sFCB, ext), &fillname[11], 3);
 	fillname[14] = 0;
 	}
 
 void DOS_FCB::GetAttr(Bit8u& attr)
 	{
 	if (extended)
-		attr = vPC_rLodsb(pt - 1);
+		attr = Mem_Lodsb(pt - 1);
 	}
 
 void DOS_FCB::SetAttr(Bit8u attr)
 	{
 	if (extended)
-		vPC_rStosb(pt-1, attr);
+		Mem_Stosb(pt-1, attr);
 	}
 
 void DOS_SDA::Init()
 	{
 	// Clear
-	vPC_rStoswb(pt, 0, sizeof(sSDA));
+	Mem_rStosb(pt, 0, sizeof(sSDA));
 	sSave(sSDA, drive_crit_error, 0xff);   
 	}

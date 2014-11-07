@@ -14,8 +14,6 @@ const char* MSG_Get(char const *);			// Get messages from the internal langaugaf
 
 extern char vDosVersion[];
 
-typedef void (LoopHandler)(void);
-
 void RunPC();
 bool ConfGetBool(const char *name);
 int ConfGetInt(const char *name);
@@ -32,8 +30,18 @@ extern HWND	sdlHwnd;
 
 #define DOS_FILES 255
 
+extern int winHide10th;
+extern bool winHidden;
+extern DWORD hideWinTill;
 extern bool usesMouse;
 extern int wpVersion;
+extern bool	mouseWP6x;
+extern int wsVersion;
+extern int wsBackGround;
+extern int codepage;
+
+extern Bit8u initialvMode;
+
 extern bool wpExclude;
 extern int idleCount;
 
@@ -46,5 +54,9 @@ extern Bit8u tempBuff1K [];					// Temporary buffers, caution don't use them in 
 extern Bit8u tempBuff2K [];
 extern Bit8u tempBuff4K [];
 extern Bit8u tempBuff32K [];
+
+extern Bitu lastOpcode;
+
+extern bool EMS_present;
 
 #endif

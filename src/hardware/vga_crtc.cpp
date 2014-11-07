@@ -89,17 +89,11 @@ void vga_write_p3d5(Bitu port, Bitu val, Bitu iolen)
 		{
 		Bit8u old = crtc(maximum_scan_line);
 		crtc(maximum_scan_line) = val;
-
-		if(!vga.draw.doublescan_merging)
-			{
-			if ((old ^ val) & 0x20)
-				VGA_StartResize();
-			vga.draw.address_line_total = (val &0x1F) + 1;
-			if (val & 0x80)
-				vga.draw.address_line_total *= 2;
-			}
-		else if ((old ^ val) & 0xbf)
+		if ((old^val)&0x20)
 			VGA_StartResize();
+//		vga.draw.address_line_total = (val&0x1f)+1;
+//		if (val&0x80)
+//			vga.draw.address_line_total *= 2;
 		/*
 			0-4	Number of scan lines in a character row -1. In graphics modes this is
 				the number of times (-1) the line is displayed before passing on to
@@ -124,7 +118,6 @@ void vga_write_p3d5(Bitu port, Bitu val, Bitu iolen)
 	case 0x0B:																						// Cursor end register
 		crtc(cursor_end) = val;
 		vga.draw.cursor.eline = val&0x1f;
-		vga.draw.cursor.delay = (val>>5)&0x3;
 		/* 
 			0-4	Last scanline of cursor within character
 			5-6	Delay of cursor data in character clocks.
@@ -159,8 +152,6 @@ void vga_write_p3d5(Bitu port, Bitu val, Bitu iolen)
 		break;
 	case 0x11:																						// Vertical retrace end register
 		crtc(vertical_retrace_end) = val;
-		if (!(val & 0x10))
-			vga.draw.vret_triggered = false;
 		/*
 			0-3	Vertical Retrace ends when the last 4 bits of the line counter equals
 				this value.
@@ -175,18 +166,8 @@ void vga_write_p3d5(Bitu port, Bitu val, Bitu iolen)
 	case 0x12:																						// Vertical display end register
 		if (val != crtc(vertical_display_end))
 			{
-			if (abs((Bits)val-(Bits)crtc(vertical_display_end)) < 3)
-				{
-				PIC_RemoveEvents(VGA_SetupDrawing);													// Delay small vde changes a bit to avoid screen resizing
-				vga.draw.resizing = false;															// if they are reverted in a short timeframe
-				crtc(vertical_display_end) = val;
-				VGA_StartResize(150);
-				}
-			else
-				{
-				crtc(vertical_display_end) = val;
-				VGA_StartResize();
-				}
+			crtc(vertical_display_end) = val;
+			VGA_StartResize();
 			}
 		/*
 			0-7	Lower 8 bits of Vertical Display End. The display ends when the line
@@ -198,7 +179,7 @@ void vga_write_p3d5(Bitu port, Bitu val, Bitu iolen)
 		crtc(offset) = val;
 		vga.config.scan_len &= 0x300;
 		vga.config.scan_len |= val;
-		VGA_CheckScanLength();
+//		VGA_CheckScanLength();
 		/*
 			0-7	Number of bytes in a scanline / K. Where K is 2 for byte mode, 4 for
 				word mode and 8 for Double Word mode.

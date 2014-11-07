@@ -820,14 +820,14 @@
 		GetEAa;												\
 		Bit8u val=blah & 0x1f;								\
 		switch (which) {									\
-		case 0x00:ROLB(eaa,val,vPC_rLodsb,SaveMb);break;	\
-		case 0x01:RORB(eaa,val,vPC_rLodsb,SaveMb);break;	\
-		case 0x02:RCLB(eaa,val,vPC_rLodsb,SaveMb);break;	\
-		case 0x03:RCRB(eaa,val,vPC_rLodsb,SaveMb);break;	\
+		case 0x00:ROLB(eaa,val,Mem_Lodsb,Mem_Stosb);break;	\
+		case 0x01:RORB(eaa,val,Mem_Lodsb,Mem_Stosb);break;	\
+		case 0x02:RCLB(eaa,val,Mem_Lodsb,Mem_Stosb);break;	\
+		case 0x03:RCRB(eaa,val,Mem_Lodsb,Mem_Stosb);break;	\
 		case 0x04:/* SHL and SAL are the same */			\
-		case 0x06:SHLB(eaa,val,vPC_rLodsb,SaveMb);break;	\
-		case 0x05:SHRB(eaa,val,vPC_rLodsb,SaveMb);break;	\
-		case 0x07:SARB(eaa,val,vPC_rLodsb,SaveMb);break;	\
+		case 0x06:SHLB(eaa,val,Mem_Lodsb,Mem_Stosb);break;	\
+		case 0x05:SHRB(eaa,val,Mem_Lodsb,Mem_Stosb);break;	\
+		case 0x07:SARB(eaa,val,Mem_Lodsb,Mem_Stosb);break;	\
 		}													\
 	}														\
 }
@@ -854,14 +854,14 @@
 		GetEAa;												\
 		Bit8u val=blah & 0x1f;								\
 		switch (which) {									\
-		case 0x00:ROLW(eaa,val,vPC_rLodsw,SaveMw);break;	\
-		case 0x01:RORW(eaa,val,vPC_rLodsw,SaveMw);break;	\
-		case 0x02:RCLW(eaa,val,vPC_rLodsw,SaveMw);break;	\
-		case 0x03:RCRW(eaa,val,vPC_rLodsw,SaveMw);break;	\
+		case 0x00:ROLW(eaa,val,Mem_Lodsw,Mem_Stosw);break;	\
+		case 0x01:RORW(eaa,val,Mem_Lodsw,Mem_Stosw);break;	\
+		case 0x02:RCLW(eaa,val,Mem_Lodsw,Mem_Stosw);break;	\
+		case 0x03:RCRW(eaa,val,Mem_Lodsw,Mem_Stosw);break;	\
 		case 0x04:/* SHL and SAL are the same */			\
-		case 0x06:SHLW(eaa,val,vPC_rLodsw,SaveMw);break;	\
-		case 0x05:SHRW(eaa,val,vPC_rLodsw,SaveMw);break;	\
-		case 0x07:SARW(eaa,val,vPC_rLodsw,SaveMw);break;	\
+		case 0x06:SHLW(eaa,val,Mem_Lodsw,Mem_Stosw);break;	\
+		case 0x05:SHRW(eaa,val,Mem_Lodsw,Mem_Stosw);break;	\
+		case 0x07:SARW(eaa,val,Mem_Lodsw,Mem_Stosw);break;	\
 		}													\
 	}														\
 }
@@ -887,14 +887,14 @@
 		GetEAa;												\
 		Bit8u val=blah & 0x1f;								\
 		switch (which) {									\
-		case 0x00:ROLD(eaa,val,vPC_rLodsd,SaveMd);break;	\
-		case 0x01:RORD(eaa,val,vPC_rLodsd,SaveMd);break;	\
-		case 0x02:RCLD(eaa,val,vPC_rLodsd,SaveMd);break;	\
-		case 0x03:RCRD(eaa,val,vPC_rLodsd,SaveMd);break;	\
+		case 0x00:ROLD(eaa,val,Mem_Lodsd,Mem_Stosd);break;	\
+		case 0x01:RORD(eaa,val,Mem_Lodsd,Mem_Stosd);break;	\
+		case 0x02:RCLD(eaa,val,Mem_Lodsd,Mem_Stosd);break;	\
+		case 0x03:RCRD(eaa,val,Mem_Lodsd,Mem_Stosd);break;	\
 		case 0x04:/* SHL and SAL are the same */			\
-		case 0x06:SHLD(eaa,val,vPC_rLodsd,SaveMd);break;	\
-		case 0x05:SHRD(eaa,val,vPC_rLodsd,SaveMd);break;	\
-		case 0x07:SARD(eaa,val,vPC_rLodsd,SaveMd);break;	\
+		case 0x06:SHLD(eaa,val,Mem_Lodsd,Mem_Stosd);break;	\
+		case 0x05:SHRD(eaa,val,Mem_Lodsd,Mem_Stosd);break;	\
+		case 0x07:SARD(eaa,val,Mem_Lodsd,Mem_Stosd);break;	\
 		}													\
 	}														\
 }

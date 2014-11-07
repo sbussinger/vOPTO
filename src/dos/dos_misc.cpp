@@ -10,26 +10,38 @@ static Bitu INT2F_Handler(void)
 	{
 	switch (reg_ax)
 		{
-	case 0x1000:													// SHARE.EXE installation check
-		reg_ax = 0xffff;											// Pretend SHARE.EXE is installed.
-	case 0x1680:													// Release current virtual machine time-slice
-	case 0x1689:													// Kernel IDLE CALL
+	case 0x1000:																	// SHARE.EXE installation check
+		reg_al = 0xff;																// Pretend it's installed.
 		break;
-	case 0x4300:													// XMS installed check
-		reg_al = 0x80;
+	case 0x1680:																	// Release current virtual machine time-slice
+		idleCount = idleTrigger;
 		break;
-	case 0x4310:													// XMS handler seg:offset
-		SegSet16(es, RealSeg(xms_callback));
-		reg_bx = RealOff(xms_callback);
+	case 0x4300:																	// XMS installed check
+		if (!EMS_present)
+			reg_al = 0x80;
+		break;
+	case 0x4310:																	// XMS handler seg:offset
+		if (!EMS_present)
+			{
+			SegSet16(es, RealSeg(xms_callback));
+			reg_bx = RealOff(xms_callback);
+			}
 		break;			
-	case 0x4a01:													// Query free hma space
-	case 0x4a02:													// Allocate HMA space
-		reg_bx = 0;													// Number of bytes available in HMA
-		SegSet16(es, 0xffff);										// ES:DI = ffff:ffff HMA not used
+	case 0x4a01:																	// Query free HMA space
+	case 0x4a02:																	// Allocate HMA space
+		reg_bx = 0;																	// Number of bytes available in HMA
+		SegSet16(es, 0xffff);														// ES:DI = ffff:ffff HMA not used
 		reg_di = 0xffff;
 		break;
+	case 0xb800:																	// Network - installation check
+		reg_al = 1;																	// Installed
+		reg_bx = 8;																	// Bit 3 - redirector
+		break;
+	case 0xb809:																	// Network - get version
+		reg_ax = 0x0201;															// Major-minor version as returned by NTVDM-Windows XP
+		break;
 	default:
-		LOG_MSG("DOS-Multiplex unhandled call %4X", reg_ax);
+		LOG_MSG("Int 2F unhandled call %4X", reg_ax);
 		}
 	return CBRET_NONE;
 	}
@@ -41,12 +53,6 @@ static Bitu INT2A_Handler(void)
 
 void DOS_SetupMisc(void)
 	{
-	// Setup the dos multiplex interrupt
-	Bitu call_int2f = CALLBACK_Allocate();
-	CALLBACK_Setup(call_int2f, &INT2F_Handler, CB_IRET, "DOS Int 2f");
-	RealSetVec(0x2f, CALLBACK_RealPointer(call_int2f));
-	// Setup the dos network interrupt
-	Bitu call_int2a = CALLBACK_Allocate();
-	CALLBACK_Setup(call_int2a, &INT2A_Handler, CB_IRET, "DOS Int 2a");
-	RealSetVec(0x2A, CALLBACK_RealPointer(call_int2a));
+	CALLBACK_Install(0x2f, &INT2F_Handler, CB_IRET);								// DOS Int 2f - Multiplex
+	CALLBACK_Install(0x2a, &INT2A_Handler, CB_IRET);								// DOS Int 2a - Network
 	}

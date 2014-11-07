@@ -44,32 +44,28 @@ void PageHandler::writed(PhysPt addr, Bit32u val)
 
 HostPt PageHandler::GetHostPt(PhysPt addr)
 	{
-	E_Exit("Access to invalid memory location %x", addr);	
-	}
-
-Bitu PAGING_GetDirBase(void)
-	{
-	return paging.cr3;
+	E_Exit("Access to invalid memory location %x", addr);
+	return 0;
 	}
 
 void PAGING_SetDirBase(Bitu cr3)
 	{
 //	E_Exit("Memory paging in protected mode is not supported");
-	if (cr3&0xfff)													// On hold, needs more work
-		E_Exit("Pgae fault: CR3 not page aligned");
-	paging.cr3 = cr3;
+
+	if (cr3 != 0 && paging.cr3 != cr3)												// Shoot me, Phar Lap is frequently switching between 0 and the previous set value
+		{
+		if (cr3&0xfff)
+			E_Exit("Page fault: CR3 not page aligned");
+		clearTLB();
+		paging.cr3 = cr3;
+		}
 	}
 
 void PAGING_Enable(bool enabled)
 	{
 //	if (enabled)
 //		E_Exit("Memory paging in protected mode is not supported");
-	paging.enabled = enabled;										// On hold, needs more work
-	}
-
-bool PAGING_Enabled(void)
-	{
-	return paging.enabled;
+	paging.enabled = enabled;
 	}
 
 void PAGING_Init()

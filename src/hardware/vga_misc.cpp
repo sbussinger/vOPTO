@@ -13,20 +13,13 @@ Bitu vga_read_p3d5(Bitu port, Bitu iolen);
 Bitu vga_read_p3da(Bitu port, Bitu iolen)											// bit 0 = horizontal or vertical blanking, 3 = vertical sync
 	{
 	static Bitu hvBlank = 0;														// Just cycle through 0 and 1 (don't mind this hard level check)
+	vga.internal.attrindex = false;
 	hvBlank ^= 1;
 	Bit8u retval = hvBlank;
-	double timeInFrame = PIC_FullIndex()-vga.draw.delay.framestart;
-
-	vga.internal.attrindex = false;
-
-	if (timeInFrame >= vga.draw.delay.vrstart && timeInFrame <= vga.draw.delay.vrend)
-		retval |= 8;
-	return retval;
-	if (timeInFrame >= vga.draw.delay.vdend)
-		retval |= 1;
-	else
+	if (vga.draw.vertRetrace)														// Set by VGA_VerticalTimer()
 		{
-		double timeInLine = fmod(timeInFrame, vga.draw.delay.htotal);
+		retval |= 8;
+//		vga.draw.vertRetrace = false;
 		}
 	return retval;
 	}
@@ -36,12 +29,12 @@ static void write_p3c2(Bitu port, Bitu val,Bitu iolen)
 	vga.misc_output = val;
 	if (val & 0x1)
 		{
-		IO_RegisterWriteHandler(0x3d4, vga_write_p3d4, IO_MB);
-		IO_RegisterReadHandler(0x3d4, vga_read_p3d4, IO_MB);
-		IO_RegisterReadHandler(0x3da, vga_read_p3da, IO_MB);
+		IO_RegisterWriteHandler(0x3d4, vga_write_p3d4);
+		IO_RegisterReadHandler(0x3d4, vga_read_p3d4);
+		IO_RegisterReadHandler(0x3da, vga_read_p3da);
 
-		IO_RegisterWriteHandler(0x3d5, vga_write_p3d5, IO_MB);
-		IO_RegisterReadHandler(0x3d5, vga_read_p3d5, IO_MB);
+		IO_RegisterWriteHandler(0x3d5, vga_write_p3d5);
+		IO_RegisterReadHandler(0x3d5, vga_read_p3d5);
 
 		IO_FreeWriteHandler(0x3b4, IO_MB);
 		IO_FreeReadHandler(0x3b4, IO_MB);
@@ -51,12 +44,12 @@ static void write_p3c2(Bitu port, Bitu val,Bitu iolen)
 		}
 	else
 		{
-		IO_RegisterWriteHandler(0x3b4, vga_write_p3d4, IO_MB);
-		IO_RegisterReadHandler(0x3b4, vga_read_p3d4, IO_MB);
-		IO_RegisterReadHandler(0x3ba, vga_read_p3da, IO_MB);
+		IO_RegisterWriteHandler(0x3b4, vga_write_p3d4);
+		IO_RegisterReadHandler(0x3b4, vga_read_p3d4);
+		IO_RegisterReadHandler(0x3ba, vga_read_p3da);
 
-		IO_RegisterWriteHandler(0x3b5, vga_write_p3d5, IO_MB);
-		IO_RegisterReadHandler(0x3b5, vga_read_p3d5, IO_MB);
+		IO_RegisterWriteHandler(0x3b5, vga_write_p3d5);
+		IO_RegisterReadHandler(0x3b5, vga_read_p3d5);
 
 		IO_FreeWriteHandler(0x3d4, IO_MB);
 		IO_FreeReadHandler(0x3d4, IO_MB);
@@ -108,8 +101,6 @@ static Bitu read_p3c2(Bitu port,Bitu iolen)
 		break;
 		}
 
-	if (vga.draw.vret_triggered)
-		retval |= 0x80;
 	return retval;
 	/*
 		0-3 0xF on EGA, 0x0 on VGA 
@@ -127,9 +118,8 @@ static Bitu read_p3c2(Bitu port,Bitu iolen)
 
 void VGA_SetupMisc(void)
 	{
-	vga.draw.vret_triggered = false;
-	IO_RegisterReadHandler(0x3c2, read_p3c2, IO_MB);
-	IO_RegisterWriteHandler(0x3c2, write_p3c2, IO_MB);
-	IO_RegisterReadHandler(0x3ca, read_p3ca, IO_MB);
-	IO_RegisterReadHandler(0x3cc, read_p3cc, IO_MB);
+	IO_RegisterReadHandler(0x3c2, read_p3c2);
+	IO_RegisterWriteHandler(0x3c2, write_p3c2);
+	IO_RegisterReadHandler(0x3ca, read_p3ca);
+	IO_RegisterReadHandler(0x3cc, read_p3cc);
 	}
