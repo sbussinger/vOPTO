@@ -366,8 +366,8 @@ static Bitu INT16_Handler(void)
 			VGA_ResetVertTimer(pastedHead != pastedTail && temp != 0x1c0d && pastedData[pastedHead+1] != 13); // Hide them till Enter (at least WP 6 is that sluggish, we can't hide till all)
 			reg_ax = temp;
 			}
-		else if (CPU_Cycles > 100)													// Consume some cycles to allow irqs to happen
-			CPU_Cycles -= 100;
+		else
+			reg_ip += 1;															// Consume some cycles to allow irqs to happen
 		break;
 	case 0x10:																		// Get keystroke (enhanced keyboards only)
 		if (get_key(temp))
@@ -377,8 +377,8 @@ static Bitu INT16_Handler(void)
 			reg_ax = temp;
 			VGA_ResetVertTimer(pastedHead != pastedTail && temp != 0x1c0d && pastedData[pastedHead+1] != 13);
 			}
-		else if (CPU_Cycles > 100)													// Consume some cycles to allow irqs to happen
-			CPU_Cycles -= 100;
+		else
+			reg_ip += 1;															// Consume some cycles to allow irqs to happen
 		break;
 	case 0x01:																		// Check for keystroke
 		for (;;)

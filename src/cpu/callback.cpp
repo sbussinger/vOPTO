@@ -161,6 +161,9 @@ void CALLBACK_SetupExtra(Bitu callback, Bitu type, PhysPt physAddress)
 		Mem_aStosw(physAddress+1, 0x38FE);											// GRP 4 + Extra Callback instruction
 		Mem_aStosw(physAddress+3, callback);										// The immediate word
 		Mem_aStosb(physAddress+5, 0xCF);											// IRET
+		for (int i = 0; i <= 11; i++)
+			Mem_aStosb(physAddress+6+i, 0x90);										// NOP's if INT 16 doesn't return
+		Mem_aStosw(physAddress+18, 0xedeb);											// JMP callback
 		break;
 	case CB_HOOKABLE:
 		Mem_aStosw(physAddress+0, 0x03eb);											// jump near + offset

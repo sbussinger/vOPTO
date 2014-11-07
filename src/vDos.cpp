@@ -11,7 +11,7 @@
 #include "mouse.h"
 #include "vga.h"
 
-char vDosVersion[] = "2014.10.17";
+char vDosVersion[] = "2014.10.19";
 
 // The whole load of startups for all the subfunctions
 void GUI_StartUp();
