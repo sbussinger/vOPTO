@@ -21,6 +21,8 @@
 
 DOS_File ** Files;
 DOS_Drive * Drives[DOS_DRIVES];
+#define DOS_MAILSLOTS  127
+s_mailbox_Data MailBoxData[DOS_MAILSLOTS];
 
 // FCB drive:DOS 8.3 filename to string, padding spaces from name and extension removed
 void FCBNameToStr(char *name)
