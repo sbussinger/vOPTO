@@ -939,8 +939,259 @@ static Bitu DOS_21Handler(void)
 		CALLBACK_SCF(true);
 		break;
 	case 0x5f:																		// Network redirection
-		reg_ax = 1;																	// Failing it
+		switch (reg_al) {
+		case 0x4d:      /* LAN Manager DosMakeMailSlot */
+		{
+			/*
+			AX = 5F4Dh
+			BX = message size
+			CX = mailslot size (must be bigger than message size by at least 1)
+				(minimum 1000h, maximum FFF6h)
+				(buffer must be 9 bytes bigger than this)
+			DS:SI -> name
+			ES:DI -> memory buffer
+
+			Return:
+				CF clear if successful AX = handle CF set on error AX = error code 
+			*/
+			HANDLE hFile; 
+			Bit16u i;
+			char SlotName[128];
+			char SN[128];
+			vPC_rStrnCpy(SlotName,SegPhys(ds)+reg_si,127); 
+			if (strncmp(SlotName, "\\\\", 2) != 0) {
+				strcpy(SN,"\\\\.");
+				strcat(SN, SlotName);  
+			} else {
+				strcpy(SN,SlotName);
+			}
+
+			hFile = CreateMailslot(SN, reg_bx, MAILSLOT_WAIT_FOREVER,
+									(LPSECURITY_ATTRIBUTES) NULL); // default security
+			if (hFile == INVALID_HANDLE_VALUE) { 
+				reg_ax = (Bit16u)GetLastError();
+				CALLBACK_SCF(true);
+			} else {
+				reg_ax = 0xffff;
+				CALLBACK_SCF(true);
+				for (i=1;i<DOS_MAILSLOTS;i++) {
+					if (!MailBoxData[i].hBox) {
+						MailBoxData[i].hBox = hFile;
+						MailBoxData[i].BufOff = reg_di;
+						MailBoxData[i].BufSeg = 0;
+						MailBoxData[i].MessageSize = reg_bx;
+						MailBoxData[i].BufSize = reg_cx;
+						reg_ax = i; /* Handle */
+						CALLBACK_SCF(false);
+						break;
+				    };
+			    };
+			}
+		}
+		break;
+		case 0x4e:      /* LAN Manager DosDeleteMailSlot */
+		{
+			/*
+			AX = 5F4Eh
+			BX = handle
+
+			Return:
+				CF clear if successful ES:DI -> memory to be freed (allocated during DosMakeMailslot) CF set on error AX = error code 
+			*/
+			HANDLE hFile;
+		    Bit16u handle;
+			handle = reg_bx;
+			if (handle>=DOS_MAILSLOTS) {
+				DOS_SetError(DOSERR_INVALID_HANDLE);
+				CALLBACK_SCF(true);
+				break;
+			}
+			hFile = MailBoxData[handle].hBox;
+
+			MailBoxData[handle].hBox = 0;
+			CloseHandle(hFile);
+			CALLBACK_SCF(false);
+		}
+		break;
+		case 0x4f:		/* LAN Manager DosMailSlotInfo */
+		{
+			/*
+			AX = 5F4Fh
+			BX = handle
+
+			Return:
+				CF clear if successful 
+					AX = max message size 
+					BX = mailslot size 
+					CX = next message size 
+					DX = next message priority 
+					SI = number of messages waiting 
+				CF set on error 
+					AX = error code 
+			*/
+			HANDLE hFile; 
+			BOOL fResult; 
+			DWORD cbMessage, cMessage, cbMaxSize;
+		    Bit16u handle;
+			handle = reg_bx;
+			if (handle>=DOS_MAILSLOTS) {
+				DOS_SetError(DOSERR_INVALID_HANDLE);
+				CALLBACK_SCF(true);
+				break;
+			}
+
+			hFile = MailBoxData[handle].hBox;
+			fResult = GetMailslotInfo( hFile, // mailslot handle 
+										&cbMaxSize,    // maximum message size 
+										&cbMessage,    // size of next message 
+										&cMessage,     // number of messages 
+										(LPDWORD) NULL);  // no read time-out 
+			if (!fResult) {
+				reg_ax = (Bit16u)GetLastError();
+				CALLBACK_SCF(true);
+			} else {
+				reg_ax = (Bit16u) cbMaxSize;
+				reg_bx = MailBoxData[handle].BufSize;
+				reg_cx = (Bit16u) cbMessage;
+				reg_dx = 0;
+				reg_si = (Bit16u) cMessage;
+				CALLBACK_SCF(false);
+			}
+ 		}
+		break;
+		case 0x50:		/* LAN Manager DosReadMailSlot */
+		{
+			/*
+			AX = 5F50h
+			BX = handle
+			DX:CX = timeout
+			ES:DI -> buffer
+
+			Return:
+				CF clear if successful 
+					AX = bytes read 
+					CX = next item's size 
+					DX = next item's priority 
+				CF set on error 
+					AX = error code 
+			*/
+			HANDLE hFile; 
+			BOOL fResult; 
+			LPTSTR lpszBuffer; 
+			DWORD cbMessage, cMessage, cbMaxSize, cbRead;
+			HANDLE hEvent;
+			OVERLAPPED ov;
+		    Bit16u handle;
+			handle = reg_bx;
+			if (handle>=DOS_MAILSLOTS) {
+				DOS_SetError(DOSERR_INVALID_HANDLE);
 		CALLBACK_SCF(true);
+		break; 
+			}
+			hFile = MailBoxData[handle].hBox;
+
+			hEvent = CreateEvent(NULL, FALSE, FALSE, TEXT("ExampleSlot"));
+			if( NULL == hEvent )
+			{
+				CALLBACK_SCF(true);
+				break;
+			}
+			ov.Offset = 0;
+			ov.OffsetHigh = 0;
+			ov.hEvent = hEvent;
+
+			fResult = GetMailslotInfo( hFile, // mailslot handle 
+										&cbMaxSize,    // maximum message size 
+										&cbMessage,    // size of next message 
+										&cMessage,     // number of messages 
+										(LPDWORD) NULL);  // no read time-out 
+			// Allocate memory for the message. 
+ 
+			lpszBuffer = (LPTSTR) GlobalAlloc(GPTR, cbMessage+1); 
+			if( NULL != lpszBuffer ) {
+			lpszBuffer[0] = '\0'; 
+
+			fResult = ReadFile(hFile, lpszBuffer, cbMessage, &cbRead, &ov); 
+
+ 
+			if (fResult == 0) {
+				reg_ax = (Bit16u)GetLastError();
+				CALLBACK_SCF(true);
+			} else {
+				vPC_rBlockWrite(SegPhys(es)+reg_di,lpszBuffer,(Bitu)cbRead);
+			    fResult = GetMailslotInfo( hFile, // mailslot handle 
+										&cbMaxSize,    // maximum message size 
+										&cbMessage,    // size of next message 
+										&cMessage,     // number of messages 
+										(LPDWORD) NULL);  // no read time-out 
+				reg_ax = (Bit16u) cbRead;
+				reg_cx = (Bit16u) cbMessage;
+				reg_dx = 0;
+				CALLBACK_SCF(false);
+			}
+            GlobalFree((HGLOBAL) lpszBuffer); 
+			} else {
+				CALLBACK_SCF(true);
+			}
+
+			CloseHandle(hEvent);
+ 		}
+		break;
+		case 0x52:		/* LAN Manager DosWriteMailSlot */
+		{
+			/*
+			AX = 5F52h
+			BX = class
+			CX = length of buffer
+			DX = priority
+			ES:DI -> DosWriteMailslot parameter structure (see #01726)
+			DS:SI -> mailslot name
+
+			Return:
+				CF clear if successful CF set on error AX = error code
+			*/
+			HANDLE hFile; 
+			BOOL fResult; 
+			DWORD cbWritten; 
+			char SlotName[128];
+			char SN[128];
+			char Buf[0xffff];
+			Bit16u toread;
+			struct pwms {
+				Bit32s timeout;
+				Bit16u offsbuffer,segbuffer;
+			} Param;
+			toread=reg_cx;
+			vPC_rStrnCpy(SlotName,SegPhys(ds)+reg_si,127); 
+			vPC_rBlockRead(SegPhys(es)+reg_di,&Param,8);
+			vPC_rBlockRead((Param.segbuffer << 4)+Param.offsbuffer,Buf,toread);
+			if (strncmp(SlotName, "\\\\", 2) != 0) {
+				strcpy(SN,"\\\\.");
+				strcat(SN, SlotName);  
+			} else {
+				strcpy(SN,SlotName);
+			}
+
+			hFile = CreateFile(SN, GENERIC_WRITE, FILE_SHARE_READ,
+								(LPSECURITY_ATTRIBUTES) NULL, OPEN_EXISTING, 
+								FILE_ATTRIBUTE_NORMAL, (HANDLE) NULL); 
+ 
+			if (hFile == INVALID_HANDLE_VALUE) { 
+				reg_ax = (Bit16u)GetLastError();
+				CALLBACK_SCF(true);
+			} else {
+			fResult = WriteFile(hFile, Buf, (DWORD) toread,  
+								&cbWritten, (LPOVERLAPPED) NULL);    
+			CloseHandle(hFile); 
+			reg_ax = 0;
+			CALLBACK_SCF(false);
+			}
+ 		}
+		break;
+		default:
+			reg_ax=0x0001;		//Failing it
+		CALLBACK_SCF(true);
+	        }; // end of switch
 		break; 
 	case 0x60:																		// Canonicalize filename or path
 		vPC_rStrnCpy(name1, SegPhys(ds)+reg_si, DOSNAMEBUF);
