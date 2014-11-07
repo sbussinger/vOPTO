@@ -1,0 +1,3 @@
+# Because the vendor sources for this code includes binaries, we don't
+# want to exclude any files so the repository tracks the source closely.
+# Be careful not to commit any unnecessary files to repository!
