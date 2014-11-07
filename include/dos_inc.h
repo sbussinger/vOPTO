@@ -30,6 +30,7 @@ enum {RETURN_EXIT = 0, RETURN_CTRLC = 1, RETURN_ABORT = 2, RETURN_TSR = 3};
 
 #define DOS_DRIVES 26
 #define DOS_DEVICES 25
+#define DOS_MAILSLOTS 127
 
 
 // dos swappable area is 0x320 bytes beyond the sysvars table
@@ -52,6 +53,7 @@ enum {RETURN_EXIT = 0, RETURN_CTRLC = 1, RETURN_ABORT = 2, RETURN_TSR = 3};
 extern DOS_File ** Files;
 extern DOS_Drive * Drives[DOS_DRIVES];
 extern DOS_Device * Devices[DOS_DEVICES];
+extern s_mailbox_Data MailBoxData[DOS_MAILSLOTS];
 
 extern Bit8u dos_copybuf[0x10000];
 
