@@ -10,4 +10,7 @@ The original vDos project can be found at [http://sourceforge.net/projects/vdos/
 ## Features
 This fork tracks the master source code of the vDos project and adds several features necessary to support the OPTO program.
 
+### mailslots
+This branch adds the DOS Mailslot API's to vDos.
+
 ## Project Notes
