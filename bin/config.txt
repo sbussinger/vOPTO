@@ -33,6 +33,13 @@ rem UMB = ON
 rem Extended memory is 16MB, that should be sufficient for any DOS program.
 
 
+REM System
+REM ======
+rem The default drive letter used for the DOS boot drive is Z:
+rem You can change that drive letter to A: with:
+rem BOOTDRIVE = A
+
+
 REM Mouse
 REM =====
 rem In text mode the mouse is disabled.

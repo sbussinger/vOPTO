@@ -400,7 +400,10 @@ static Bitu DOS_21Handler(void)
 		case 4: // Set cpsw				// both not used really
 			break;
 		case 5:
-			reg_dl = DOSBOX_DRIVE_CHAR; // 'a'
+			{
+			const char * bootdrive = static_cast<Section_prop *>(control->GetSection())->Get_string("bootdrive");
+			reg_dl = bootdrive[0] & 0x1F;
+			}
 			break;
 		case 6:		// Get true version number
 			reg_bx = (dos.version.minor<<8) + dos.version.major;
@@ -1172,8 +1175,9 @@ public:
 		DOS_SetupTables();
 		DOS_SetupMemory(section->Get_bool("low"));		// Setup first MCB
 		DOS_SetupMisc();								// Some additional dos interrupts
-		DOS_SDA(DOS_SDA_SEG,DOS_SDA_OFS).SetDrive(DOSBOX_DRIVE_INT);	// Else the next call gives a warning.
-		DOS_SetDefaultDrive(DOSBOX_DRIVE_INT);          // 0
+		int bootdrive = (section->Get_string("bootdrive")[0] & 0x1F) - 1;
+		DOS_SDA(DOS_SDA_SEG,DOS_SDA_OFS).SetDrive(bootdrive);	// Else the next call gives a warning.
+		DOS_SetDefaultDrive(bootdrive);
 	
 		dos.version.major = 5;
 		dos.version.minor = 0;
