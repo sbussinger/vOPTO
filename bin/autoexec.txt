@@ -1,24 +1,16 @@
-@ECHO OFF
+@echo off
+rem enkel z: (opstartschijf/command.com) is in eerste instantie beschikbaar
+rem use <schijfletter:> <Windows directory>
+use d: d:\
+rem use f: f:\
+rem use c: d:\
+rem use c: d:\DOS-C\
 
-rem This is essentialy the autoexec.bat of DOS.
-rem Only one additional vDos specific command is available: USE.
+rem f:
+rem cd exact70
 
-rem At startup only z: (bootdisk/command.com) is known by DOS.
-rem So first you assign one or more DOS driveletters to Windows directories.
-rem Use <driveletter:> <Windows directory>
-rem Files/directories that don't confirm to the DOS 8.3 filenaming are hidden (as it should).
+d:
+cd fiad.eur
+fiad
+exit
 
-rem To just use the vDos working directory as c:
-USE C: .\
-
-rem switch from z: to c:
-C:
-
-rem select the DPTEST directory
-CD DPTEST
-
-rem Start the DataPerfect Testdrive program.
-DPT
-
-rem Close the vDos window as DPT is closed
-EXIT
