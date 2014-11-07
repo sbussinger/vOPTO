@@ -4,6 +4,7 @@
 #include "regs.h"
 #include "inout.h"
 #include "int10.h"
+#include "bios.h"
 
 Int10Data int10;
 
@@ -24,7 +25,7 @@ static Bitu INT10_Handler(void)
 		idleCount++;
 		reg_dl = CURSOR_POS_COL(reg_bh);
 		reg_dh = CURSOR_POS_ROW(reg_bh);
-		reg_cx = vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_CURSOR_TYPE);
+		reg_cx = Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_CURSOR_TYPE);
 		break;
 	case 0x04:																				// Read light pen pos
 		reg_ax = 0;																			// Light pen is not supported
@@ -42,7 +43,7 @@ static Bitu INT10_Handler(void)
 		INT10_ReadCharAttr(&reg_ax, reg_bh);
 		break;						
 	case 0x09:																				// Write character & attribute at cursor CX times
-		INT10_WriteChar(reg_al, vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_MODE) == 0x11 ? (reg_bl&0x80)|0x3f : reg_bl, reg_bh, reg_cx, true);
+		INT10_WriteChar(reg_al, Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_MODE) == 0x11 ? (reg_bl&0x80)|0x3f : reg_bl, reg_bh, reg_cx, true);
 		break;
 	case 0x0A:																				// Write character at cursor CX times
 		INT10_WriteChar(reg_al, reg_bl, reg_bh, reg_cx, false);
@@ -59,9 +60,9 @@ static Bitu INT10_Handler(void)
 		INT10_TeletypeOutput(reg_al, reg_bl);
 		break;
 	case 0x0F:																				// Get videomode
-		reg_bh = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
-		reg_al = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_MODE)|(vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL)&0x80);
-		reg_ah = (Bit8u)vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_NB_COLS);
+		reg_bh = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_PAGE);
+		reg_al = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CURRENT_MODE)|(Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL)&0x80);
+		reg_ah = (Bit8u)Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_NB_COLS);
 		break;					
 	case 0x10:																				// Palette functions
 		switch (reg_al)
@@ -131,40 +132,39 @@ static Bitu INT10_Handler(void)
 			IO_Write(0x3c4, 0x3);
 			IO_Write(0x3c5, reg_bl);
 			break;
-		// Graphics mode calls
 		case 0x20:																			// Set User 8x8 Graphics characters
 			RealSetVec(0x1f, SegOff2dWord(SegValue(es), reg_bp));
 			break;
 		case 0x21:																			// Set user graphics characters
 			RealSetVec(0x43, SegOff2dWord(SegValue(es), reg_bp));
-			vPC_rStosw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, reg_cx);
+			Mem_Stosw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, reg_cx);
 			goto graphics_chars;
 		case 0x22:																			// Rom 8x14 set
 			RealSetVec(0x43, int10.rom.font_14);
-			vPC_rStosw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, 14);
+			Mem_Stosw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, 14);
 			goto graphics_chars;
 		case 0x23:																			// Rom 8x8 double dot set
 			RealSetVec(0x43, int10.rom.font_8_first);
-			vPC_rStosw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, 8);
+			Mem_Stosw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, 8);
 			goto graphics_chars;
 		case 0x24:																			// Rom 8x16 set
 			RealSetVec(0x43, int10.rom.font_16);
-			vPC_rStosw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, 16);
+			Mem_Stosw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, 16);
 graphics_chars:
 			switch (reg_bl)
 				{
 			case 0:
-				vPC_rStosb(BIOSMEM_SEG, BIOSMEM_NB_ROWS, reg_dl-1);
+				Mem_Stosb(BIOSMEM_SEG, BIOSMEM_NB_ROWS, reg_dl-1);
 				break;
 			case 1:
-				vPC_rStosb(BIOSMEM_SEG, BIOSMEM_NB_ROWS, 13);
+				Mem_Stosb(BIOSMEM_SEG, BIOSMEM_NB_ROWS, 13);
 				break;
 			case 3:
-				vPC_rStosb(BIOSMEM_SEG, BIOSMEM_NB_ROWS, 42);
+				Mem_Stosb(BIOSMEM_SEG, BIOSMEM_NB_ROWS, 42);
 				break;
 			case 2:
 			default:
-				vPC_rStosb(BIOSMEM_SEG,BIOSMEM_NB_ROWS, 24);
+				Mem_Stosb(BIOSMEM_SEG,BIOSMEM_NB_ROWS, 24);
 				break;
 				}
 			break;
@@ -215,8 +215,8 @@ graphics_chars:
 				}
 			if ((reg_bh <= 7))
 				{
-				reg_cx = vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT);
-				reg_dl = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_NB_ROWS);
+				reg_cx = Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT);
+				reg_dl = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_NB_ROWS);
 				}
 			break;
 		default:
@@ -227,10 +227,10 @@ graphics_chars:
 		switch (reg_bl)
 			{
 		case 0x10:																			// Get EGA information
-			reg_bh = (vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS) == 0x3B4);	
+			reg_bh = (Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_CRTC_ADDRESS) == 0x3B4);	
 			reg_bl = 3;																		// 256 kb
-			reg_cl = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_SWITCHES) & 0x0F;
-			reg_ch = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_SWITCHES) >> 4;
+			reg_cl = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_SWITCHES) & 0x0F;
+			reg_ch = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_SWITCHES) >> 4;
 			break;
 		case 0x20:																			// Set alternate printscreen
 		case 0x30:																			// Select vertical resolution
@@ -245,8 +245,8 @@ graphics_chars:
 				reg_al = 0;
 				break;
 				}
-			Bit8u temp = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL) & 0xfe;
-			vPC_rStosb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL, temp|reg_al);
+			Bit8u temp = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL) & 0xfe;
+			Mem_Stosb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL, temp|reg_al);
 			reg_al = 0x12;
 			break;	
 			}		
@@ -263,16 +263,16 @@ graphics_chars:
 	case 0x1A:																				// Display Combination
 		if (reg_al == 0)																	// Get DCC
 			{
-			RealPt vsavept = vPC_rLodsd(BIOSMEM_SEG, BIOSMEM_VS_POINTER);					// Walk the tables...
-			RealPt svstable = vPC_rLodsd(RealSeg(vsavept), RealOff(vsavept)+0x10);
+			RealPt vsavept = Mem_Lodsd(BIOSMEM_SEG, BIOSMEM_VS_POINTER);					// Walk the tables...
+			RealPt svstable = Mem_Lodsd(RealSeg(vsavept), RealOff(vsavept)+0x10);
 			if (svstable)
 				{
-				RealPt dcctable = vPC_rLodsd(RealSeg(svstable), RealOff(svstable)+0x02);
-				Bit8u entries = vPC_rLodsb(RealSeg(dcctable), RealOff(dcctable)+0x00);
-				Bit8u idx = vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_DCC_INDEX);
+				RealPt dcctable = Mem_Lodsd(RealSeg(svstable), RealOff(svstable)+0x02);
+				Bit8u entries = Mem_Lodsb(RealSeg(dcctable), RealOff(dcctable)+0x00);
+				Bit8u idx = Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_DCC_INDEX);
 				if (idx < entries)															// Check if index within range
 					{
-					Bit16u dccentry = vPC_rLodsw(RealSeg(dcctable), RealOff(dcctable)+0x04+idx*2);
+					Bit16u dccentry = Mem_Lodsw(RealSeg(dcctable), RealOff(dcctable)+0x04+idx*2);
 					if ((dccentry&0xff) == 0)
 						reg_bx = dccentry>>8;
 					else
@@ -288,19 +288,19 @@ graphics_chars:
 		else if (reg_al == 1)																// Set dcc
 			{
 			Bit8u newidx = 0xff;
-			RealPt vsavept=vPC_rLodsd(BIOSMEM_SEG, BIOSMEM_VS_POINTER);						// Walk the tables...
-			RealPt svstable = vPC_rLodsd(RealSeg(vsavept), RealOff(vsavept)+0x10);
+			RealPt vsavept=Mem_Lodsd(BIOSMEM_SEG, BIOSMEM_VS_POINTER);						// Walk the tables...
+			RealPt svstable = Mem_Lodsd(RealSeg(vsavept), RealOff(vsavept)+0x10);
 			if (svstable)
 				{
-				RealPt dcctable = vPC_rLodsd(RealSeg(svstable), RealOff(svstable)+0x02);
-				Bit8u entries = vPC_rLodsb(RealSeg(dcctable), RealOff(dcctable)+0x00);
+				RealPt dcctable = Mem_Lodsd(RealSeg(svstable), RealOff(svstable)+0x02);
+				Bit8u entries = Mem_Lodsb(RealSeg(dcctable), RealOff(dcctable)+0x00);
 				if (entries)
 					{
 					Bitu ct;
 					Bit16u swpidx = reg_bh|(reg_bl<<8);
 					for (ct = 0; ct < entries; ct++)										// search the DDC index in the DCC table
 						{
-						Bit16u dccentry = vPC_rLodsw(RealSeg(dcctable), RealOff(dcctable)+0x04+ct*2);
+						Bit16u dccentry = Mem_Lodsw(RealSeg(dcctable), RealOff(dcctable)+0x04+ct*2);
 						if ((dccentry == reg_bx) || (dccentry == swpidx))
 							{
 							newidx = (Bit8u)ct;
@@ -309,7 +309,7 @@ graphics_chars:
 						}
 					}
 				}
-			vPC_rStosb(BIOSMEM_SEG,BIOSMEM_DCC_INDEX, newidx);
+			Mem_Stosb(BIOSMEM_SEG,BIOSMEM_DCC_INDEX, newidx);
 			reg_ax = 0x1A;																	// High part destroyed or zeroed depending on BIOS
 			}
 		break;
@@ -321,11 +321,11 @@ graphics_chars:
 
 static void INT10_Seg40Init(void)
 	{
-	vPC_rStosb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, 16);										// The default char height
-	vPC_rStosb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL, 0x60);										// Clear the screen 
-	vPC_rStosb(BIOSMEM_SEG, BIOSMEM_SWITCHES, 0xF9);										// Set the basic screen we have
-	vPC_rStosb(BIOSMEM_SEG, BIOSMEM_MODESET_CTL, 0x51);										// Set the basic modeset options
-	vPC_rStosb(BIOSMEM_SEG, BIOSMEM_CURRENT_MSR, 0x09);										// Set the default MSR
+	Mem_Stosb(BIOSMEM_SEG, BIOSMEM_CHAR_HEIGHT, 16);										// The default char height
+	Mem_Stosb(BIOSMEM_SEG, BIOSMEM_VIDEO_CTL, 0x60);										// Clear the screen 
+	Mem_Stosb(BIOSMEM_SEG, BIOSMEM_SWITCHES, 0xF9);											// Set the basic screen we have
+	Mem_Stosb(BIOSMEM_SEG, BIOSMEM_MODESET_CTL, 0x51);										// Set the basic modeset options
+	Mem_Stosb(BIOSMEM_SEG, BIOSMEM_CURRENT_MSR, 0x09);										// Set the default MSR
 	}
 
 static void INT10_InitVGA(void)
@@ -338,10 +338,9 @@ static void INT10_InitVGA(void)
 void INT10_Init()
 	{
 	INT10_InitVGA();
-	Bitu call_10 = CALLBACK_Allocate();														// Setup the INT 10 vector
-	CALLBACK_Setup(call_10, &INT10_Handler, CB_IRET, "Int 10 video");
-	RealSetVec(0x10, CALLBACK_RealPointer(call_10));
+	CALLBACK_Install(0x10, &INT10_Handler, CB_IRET);										// Int 10 video
 	INT10_SetupRomMemory();																	// Init the 0x40 segment and init the datastructures in the the video rom area
 	INT10_Seg40Init();
-	INT10_SetVideoMode(3);
+	INT10_SetVideoMode(initialvMode);
+	Mem_Stosw(BIOS_CONFIGURATION, 0x24+((initialvMode&4)<<3));								// Startup 80x25 color or mono, PS2 mouse
 	}

@@ -280,29 +280,29 @@ void SHELL_Init()
 	{
 	// Regular startup
 	call_shellstop = CALLBACK_Allocate();
+	CALLBACK_Setup(call_shellstop, shellstop_handler, CB_IRET);						// Shell stop
 	// Setup the startup CS:IP to kill the last running machine when exitted
 	RealPt newcsip = CALLBACK_RealPointer(call_shellstop);
 	SegSet16(cs, RealSeg(newcsip));
 	reg_ip = RealOff(newcsip);
 
-	CALLBACK_Setup(call_shellstop, shellstop_handler, CB_IRET, "shell stop");
 	PROGRAMS_MakeFile("COMMAND.COM", SHELL_ProgramStart);
 
 	// Now call up the shell for the first time
 	Bit16u psp_seg = DOS_FIRST_SHELL;
 	Bit16u env_seg = DOS_FIRST_SHELL+19;
-	//DOS_GetMemory(1+(4096/16))+1;
-	Bit16u stack_seg = DOS_GetMemory(2048/16);
+	//DOS_GetPrivatMemory(1+(4096/16))+1;
+	Bit16u stack_seg = DOS_GetPrivatMemory(2048/16);
 	SegSet16(ss, stack_seg);
 	reg_sp = 2046;
 
 	// Set up int 24 and psp (Telarium games)
-	vPC_rStosb(psp_seg+16+1, 0, 0xea);		// far jmp
-	vPC_rStosd(psp_seg+16+1, 1, vPC_rLodsd(0, 0x24*4));
-	vPC_rStosd(0x24*4, ((Bit32u)psp_seg<<16) | ((16+1)<<4));
+	Mem_Stosb(psp_seg+16+1, 0, 0xea);		// far jmp
+	Mem_Stosd(psp_seg+16+1, 1, Mem_Lodsd(0, 0x24*4));
+	Mem_Stosd(0x24*4, ((Bit32u)psp_seg<<16) | ((16+1)<<4));
 
 	// Set up int 23 to "int 20" in the psp. Fixes what.exe
-	vPC_rStosd(0x23*4, ((Bit32u)psp_seg<<16));
+	Mem_Stosd(0x23*4, ((Bit32u)psp_seg<<16));
 
 	// Setup MCBs
 	DOS_MCB pspmcb((Bit16u)(psp_seg-1));
@@ -320,7 +320,7 @@ void SHELL_Init()
 	for (int i = 0; i<sizeof(env); i++) {
 		if (env[i] == '?') { env[i] = bootdrive[0]; }
 	}
-	vPC_rBlockWrite(SegOff2Ptr(env_seg, 0), env, sizeof(env));
+	Mem_CopyTo(SegOff2Ptr(env_seg, 0), env, sizeof(env));
 
 	DOS_PSP psp(psp_seg);
 	psp.MakeNew(0);
@@ -346,7 +346,7 @@ void SHELL_Init()
 	CommandTail tail;
 	tail.count = (Bit8u)strlen(init_line);
 	strcpy(tail.buffer, init_line);
-	vPC_rBlockWrite(SegOff2Ptr(psp_seg, 128), &tail, 128);
+	Mem_CopyTo(SegOff2Ptr(psp_seg, 128), &tail, 128);
 	
 	// Setup internal DOS Variables
 	dos.dta(SegOff2dWord(psp_seg, 0x80));

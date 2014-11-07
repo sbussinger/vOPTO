@@ -6,6 +6,5 @@ void Mouse_CursorMoved(Bit16u x, Bit16u y, Bit16u scale_x, Bit16u scale_y);
 void Mouse_ButtonPressed(Bit8u button);
 void Mouse_ButtonReleased(Bit8u button);
 
-void Mouse_NewVideoMode(void);
-
+extern Bit8u mouse_event_type;
 #endif

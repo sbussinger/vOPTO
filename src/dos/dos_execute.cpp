@@ -43,29 +43,29 @@ static void SaveRegisters(void)
 	{
 	reg_sp -= 18;
 	PhysPt ss_sp = SegPhys(ss)+reg_sp;
-	vPC_rStosw(ss_sp+ 0, reg_ax);
-	vPC_rStosw(ss_sp+ 2, reg_cx);
-	vPC_rStosw(ss_sp+ 4, reg_dx);
-	vPC_rStosw(ss_sp+ 6, reg_bx);
-	vPC_rStosw(ss_sp+ 8, reg_si);
-	vPC_rStosw(ss_sp+10, reg_di);
-	vPC_rStosw(ss_sp+12, reg_bp);
-	vPC_rStosw(ss_sp+14, SegValue(ds));
-	vPC_rStosw(ss_sp+16, SegValue(es));
+	Mem_Stosw(ss_sp+ 0, reg_ax);
+	Mem_Stosw(ss_sp+ 2, reg_cx);
+	Mem_Stosw(ss_sp+ 4, reg_dx);
+	Mem_Stosw(ss_sp+ 6, reg_bx);
+	Mem_Stosw(ss_sp+ 8, reg_si);
+	Mem_Stosw(ss_sp+10, reg_di);
+	Mem_Stosw(ss_sp+12, reg_bp);
+	Mem_Stosw(ss_sp+14, SegValue(ds));
+	Mem_Stosw(ss_sp+16, SegValue(es));
 	}
 
 static void RestoreRegisters(void)
 	{
 	PhysPt ss_sp = SegPhys(ss)+reg_sp;
-	reg_ax = vPC_rLodsw(ss_sp+ 0);
-	reg_cx = vPC_rLodsw(ss_sp+ 2);
-	reg_dx = vPC_rLodsw(ss_sp+ 4);
-	reg_bx = vPC_rLodsw(ss_sp+ 6);
-	reg_si = vPC_rLodsw(ss_sp+ 8);
-	reg_di = vPC_rLodsw(ss_sp+10);
-	reg_bp = vPC_rLodsw(ss_sp+12);
-	SegSet16(ds, vPC_rLodsw(ss_sp+14));
-	SegSet16(es, vPC_rLodsw(ss_sp+16));
+	reg_ax = Mem_Lodsw(ss_sp+ 0);
+	reg_cx = Mem_Lodsw(ss_sp+ 2);
+	reg_dx = Mem_Lodsw(ss_sp+ 4);
+	reg_bx = Mem_Lodsw(ss_sp+ 6);
+	reg_si = Mem_Lodsw(ss_sp+ 8);
+	reg_di = Mem_Lodsw(ss_sp+10);
+	reg_bp = Mem_Lodsw(ss_sp+12);
+	SegSet16(ds, Mem_Lodsw(ss_sp+14));
+	SegSet16(es, Mem_Lodsw(ss_sp+16));
 	reg_sp += 18;
 	}
 
@@ -77,33 +77,34 @@ void DOS_Terminate(Bit16u pspseg, bool tsr, Bit8u exitcode)
 	DOS_PSP curpsp(pspseg);
 	if (pspseg == curpsp.GetParent())
 		return;
-	if (!tsr)																	// Free Files owned by process
+	if (!tsr)																		// Free Files owned by process
 		curpsp.CloseFiles();
-	
-	RealPt old22 = curpsp.GetInt22();											// Get the termination address
-	curpsp.RestoreVectors();													// Restore vector 22, 23, 24
-	dos.psp(curpsp.GetParent());												// Set the parent PSP
+	curpsp.SetNumFiles(20);															// To eventualy release allocated privat DOS memory for extended JFT
+
+	RealPt old22 = curpsp.GetInt22();												// Get the termination address
+	curpsp.RestoreVectors();														// Restore vector 22, 23, 24
+	dos.psp(curpsp.GetParent());													// Set the parent PSP
 	DOS_PSP parentpsp(curpsp.GetParent());
 
-	SegSet16(ss,RealSeg(parentpsp.GetStack()));									// Restore the SS:SP to the previous one
+	SegSet16(ss,RealSeg(parentpsp.GetStack()));										// Restore the SS:SP to the previous one
 	reg_sp = RealOff(parentpsp.GetStack());
 
-	RestoreRegisters();															// Restore the old CS:IP from int 22h
+	RestoreRegisters();																// Restore the old CS:IP from int 22h
 
-	vPC_rStosd(SegPhys(ss)+reg_sp, old22);										// Set the CS:IP stored in int 0x22 back on the stack
-	vPC_rStosw(SegPhys(ss)+reg_sp+4, 0x7202);									// set IOPL=3 (Strike Commander), nested task set, interrupts enabled, test flags cleared
+	Mem_Stosd(SegPhys(ss)+reg_sp, old22);											// Set the CS:IP stored in int 0x22 back on the stack
+	Mem_Stosw(SegPhys(ss)+reg_sp+4, 0x7202);										// set IOPL=3 (Strike Commander), nested task set, interrupts enabled, test flags cleared
 
-	if (!tsr)																	// Free memory owned by process
+	if (!tsr)																		// Free memory owned by process
 		DOS_FreeProcessMemory(pspseg);
 	}
 
 static bool MakeEnv(char *name, Bit16u *segment)
 	{
 	char namebuf[DOS_PATHLENGTH];
-	if (!DOS_Canonicalize(name, namebuf))								// Shouldn't happen, but test now
-		return false;													// To prevent memory allocation
+	if (!DOS_Canonicalize(name, namebuf))											// Shouldn't happen, but test now
+		return false;																// To prevent memory allocation
 
-	char * envread, * envwrite;											// If segment to copy environment is 0 copy the caller's environment
+	char * envread, * envwrite;														// If segment to copy environment is 0 copy the caller's environment
 	if (*segment == 0)
 		{
 		DOS_PSP psp(dos.psp());
@@ -116,8 +117,8 @@ static bool MakeEnv(char *name, Bit16u *segment)
 	if (envread)
 		while (*(envread+envsize))
 			envsize += strlen(envread+envsize)+1;
-	envsize++;															// Account for trailing \0\0 (note we started at offset 1)
-	if (envsize+strlen(namebuf)+3 > MAXENV)								// Room to append \1\0filespec\0?
+	envsize++;																		// Account for trailing \0\0 (note we started at offset 1)
+	if (envsize+strlen(namebuf)+3 > MAXENV)											// Room to append \1\0filespec\0?
 		return false;
 	Bit16u size = MAXENV/16;
 	if (!DOS_AllocateMemory(segment, &size))
@@ -131,7 +132,7 @@ static bool MakeEnv(char *name, Bit16u *segment)
 	*((Bit16u *)envwrite) = 1;
 	envwrite += 2;
 	envread = namebuf;
-	while (*envread)													// Pathname should be in uppercase
+	while (*envread)																// Pathname should be in uppercase
 		*envwrite++ =  toupper(*(envread++));
 	*envwrite = 0;
 	return true;
@@ -144,7 +145,7 @@ bool DOS_NewPSP(Bit16u segment, Bit16u size)
 	Bit16u parent_psp_seg = psp.GetParent();
 	DOS_PSP psp_parent(parent_psp_seg);
 	psp.CopyFileTable(&psp_parent, false);
-	psp.SetCommandTail(SegOff2dWord(parent_psp_seg, 0x80));						// Copy command line as well (Kings Quest AGI -cga switch)
+	psp.SetCommandTail(SegOff2dWord(parent_psp_seg, 0x80));							// Copy command line as well (Kings Quest AGI -cga switch)
 	return true;
 	}
 
@@ -165,7 +166,7 @@ bool DOS_ChildPSP(Bit16u segment, Bit16u size)
 
 static void SetupPSP(Bit16u pspseg, Bit16u memsize, Bit16u envseg)
 	{
-	DOS_MCB mcb((Bit16u)(pspseg-1));											// Fix the PSP for psp and environment MCB's
+	DOS_MCB mcb((Bit16u)(pspseg-1));												// Fix the PSP for psp and environment MCB's
 	mcb.SetPSPSeg(pspseg);
 	mcb.SetPt((Bit16u)(envseg-1));
 	mcb.SetPSPSeg(pspseg);
@@ -174,14 +175,14 @@ static void SetupPSP(Bit16u pspseg, Bit16u memsize, Bit16u envseg)
 	psp.MakeNew(memsize);
 	psp.SetEnvironment(envseg);
 
-	DOS_PSP oldpsp(dos.psp());													// Copy file handles
+	DOS_PSP oldpsp(dos.psp());														// Copy file handles
 	psp.CopyFileTable(&oldpsp, true);
 	}
 
 static void SetupCMDLine(Bit16u pspseg, DOS_ParamBlock & block)
 	{
 	DOS_PSP psp(pspseg);
-	psp.SetCommandTail(block.exec.cmdtail);										// If cmdtail==0 it will inited as empty in SetCommandTail
+	psp.SetCommandTail(block.exec.cmdtail);											// If cmdtail==0 it will inited as empty in SetCommandTail
 	}
 
 bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
@@ -204,7 +205,7 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 		}
 	if (!DOS_OpenFile(name, OPEN_READ, &fhandle))
 		return false;
-	fLen = sizeof(EXE_Header);													// Check for EXE or COM File
+	fLen = sizeof(EXE_Header);														// Check for EXE or COM File
 	if (!DOS_ReadFile(fhandle, (Bit8u *)&head, &fLen))
 		{
 		DOS_SetError(DOSERR_ACCESS_DENIED);
@@ -213,13 +214,13 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 		}
 	if (fLen < sizeof(EXE_Header))
 		{
-		if (fLen == 0)															// Prevent executing zero byte files
+		if (fLen == 0)																// Prevent executing zero byte files
 			{
 			DOS_SetError(DOSERR_ACCESS_DENIED);
 			DOS_CloseFile(fhandle);
 			return false;
 			}
-		isCom = true;															// If less than header size: .com file
+		isCom = true;																// If less than header size: .com file
 		}
 	else
 		{
@@ -227,33 +228,33 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 			isCom = true;
 		else
 			{
-//			if (head.reloctable == 0x40)										// Non-Dos program (docu mentions > 40h, but PKLITE/Dos has 54)
+//			if (head.reloctable == 0x40)											// Non-Dos program (docu mentions > 40h, but PKLITE/Dos has 54)
 			if (head.reloctable >= 0x40 && head.initIP == 0 && head.initCS == 0)	// Non-Dos program
-				{																// Init.. always 0 with Windows? Q&D
+				{																	// Init.. always 0 with Windows? Q&D
 				DOS_CloseFile(fhandle);
-				if (vPC_rLodsw(block_pt))										// First word of epb_block should be 0
+				if (Mem_Lodsw(block_pt))											// First word of epb_block should be 0
 					{
 					DOS_SetError(DOSERR_FORMAT_INVALID);
 					return false;
 					}
 				char comline[256];
-				char winDirCur[512];											// Setting Windows directory to DOS drive+current directory
-				char winDirNew[512];											// and calling the program
+				char winDirCur[512];												// Setting Windows directory to DOS drive+current directory
+				char winDirNew[512];												// and calling the program
 				char winName[256];
 				Bit8u drive;
 
-				DOS_MakeName(name, winDirNew, &drive);							// Mainly to get the drive and pathname w/o it
-				if (drive != 25 && GetCurrentDirectory(512, winDirCur))			// Can't have DOS Z: as Windows current directory
+				DOS_MakeName(name, winDirNew, &drive);								// Mainly to get the drive and pathname w/o it
+				if (drive != 25 && GetCurrentDirectory(512, winDirCur))				// Can't have DOS Z: as Windows current directory
 					{
 					strcpy(winName, Drives[drive]->GetInfo());
 					strcat(winName, winDirNew);
-					strcpy(winDirNew, Drives[DOS_GetDefaultDrive()]->GetInfo());// Windows directory of DOS drive
-					strcat(winDirNew, Drives[DOS_GetDefaultDrive()]->curdir);	// Append DOS current directory
+					strcpy(winDirNew, Drives[DOS_GetDefaultDrive()]->GetInfo());	// Windows directory of DOS drive
+					strcat(winDirNew, Drives[DOS_GetDefaultDrive()]->curdir);		// Append DOS current directory
 					if (SetCurrentDirectory(winDirNew))
 						{
-						PhysPt comPtr = SegOff2Ptr(vPC_rLodsw(block_pt+4), vPC_rLodsw(block_pt+2));
+						PhysPt comPtr = SegOff2Ptr(Mem_Lodsw(block_pt+4), Mem_Lodsw(block_pt+2));
 						memset(comline, 0, 256);
-						vPC_rBlockRead(comPtr+1, comline, vPC_rLodsb(comPtr));	// Get commandline, directories are supposed Windows at this moment!
+						Mem_CopyFrom(comPtr+1, comline, Mem_Lodsb(comPtr));			// Get commandline, directories are supposed Windows at this moment!
 						if (_spawnl(P_NOWAIT, winName, winName, comline, NULL) != -1)
 							{
 							SetCurrentDirectory(winDirCur);
@@ -262,7 +263,7 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 						SetCurrentDirectory(winDirCur);
 						}
 					}
-				DOS_SetError(DOSERR_FILE_NOT_FOUND);							// jsut pick one
+				DOS_SetError(DOSERR_FILE_NOT_FOUND);								// jsut pick one
 				return false;
 				}
 			head.pages &= 0x07ff;
@@ -279,9 +280,9 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 		Bit16u maxsize = 0xffff;
 		if (isCom)
 			{
-			fPos = 0;															// Reduce minimum of needed memory size to filesize
+			fPos = 0;																// Reduce minimum of needed memory size to filesize
 			DOS_SeekFile(fhandle, &fPos, DOS_SEEK_END);
-			if (fPos > 0xff00)													// Maximum file size is 64KB - 256 bytes
+			if (fPos > 0xff00)														// Maximum file size is 64KB - 256 bytes
 				{
 				DOS_CloseFile(fhandle);
 				DOS_SetError(DOSERR_FORMAT_INVALID);
@@ -291,7 +292,7 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 			}
 		else
 			{
-			minsize = long2para(imagesize+(head.minmemory<<4)+256);				// Exe size calculated from header
+			minsize = long2para(imagesize+(head.minmemory<<4)+256);					// Exe size calculated from header
 			if (head.maxmemory != 0)
 				maxsize = long2para(imagesize+(head.maxmemory<<4)+256);
 			}
@@ -301,20 +302,20 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 		if (LoadHigh)
 			{
 			DOS_GetFreeUMB(&UMB_total, &UMB_largest, &UMB_count);
-			if (UMB_largest > (minsize+MAXENV/16))								// For simplisity, LoadHigh if enough to store environment + program
+			if (UMB_largest > (minsize+MAXENV/16))									// For simplisity, LoadHigh if enough to store environment + program
 				{
 				UMB_flag = dos_infoblock.GetUMBChainState();
 				old_memstrat = (Bit8u)(DOS_GetMemAllocStrategy()&0xff);
 				if ((UMB_flag&1) == 0)
 					DOS_LinkUMBsToMemChain(1);
-				DOS_SetMemAllocStrategy(0x41);									// Search in UMBs best fit
+				DOS_SetMemAllocStrategy(0x41);										// Search in UMBs best fit
 				maxfree = UMB_largest - 512 - 16;
 				}
 			else
 				LoadHigh = false;
 			}
 		envseg = block.exec.envseg;
-		if (!MakeEnv(name, &envseg))											// Create an environment block
+		if (!MakeEnv(name, &envseg))												// Create an environment block
 			{
 			DOS_CloseFile(fhandle);
 			return false;
@@ -336,17 +337,17 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 		if (LoadHigh)
 			{
 			DOS_LinkUMBsToMemChain(UMB_flag);
-			DOS_SetMemAllocStrategy(old_memstrat);								// Restore strategy
+			DOS_SetMemAllocStrategy(old_memstrat);									// Restore strategy
 			LoadHigh = false;
 			}
 		loadseg = pspseg+16;
 		if (!isCom)
-			if ((head.minmemory == 0) && (head.maxmemory == 0))					// Load program into upper part of allocated memory?
+			if ((head.minmemory == 0) && (head.maxmemory == 0))						// Load program into upper part of allocated memory?
 				loadseg = (Bit16u)(((pspseg+memsize)*0x10-imagesize)/0x10);
 		}
 	else
 		{
-		if (isCom)																// Can't overlay a .COM
+		if (isCom)																	// Can't overlay a .COM
 			{
 			DOS_SetError(DOSERR_FORMAT_INVALID);
 			DOS_CloseFile(fhandle);
@@ -354,27 +355,27 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 			}
 		loadseg = block.overlay.loadseg;
 		}
-	Bit8u* loadaddress = MemBase+(loadseg<<4);									// Load the executable
+	Bit8u* loadaddress = MemBase+(loadseg<<4);										// Load the executable
 
-	if (isCom)																	// COM Load 64k - 256 bytes max
+	if (isCom)																		// COM Load 64k - 256 bytes max
 		{
 		fPos = 0;
 		DOS_SeekFile(fhandle, &fPos, DOS_SEEK_SET);	
 		readsize = 0xffff-256;
 		DOS_ReadFile(fhandle, loadaddress, &readsize);
 		}
-	else																		// Load EXE in 32kb blocks and then relocates
+	else																			// Load EXE in 32kb blocks and then relocates
 		{
 		fPos = headersize;
 		DOS_SeekFile(fhandle, &fPos, DOS_SEEK_SET);
 		while (readsize = min(0x8000, imagesize))
 			{
-			imagesize -= readsize;												// Sometimes imagsize != filesize
+			imagesize -= readsize;													// Sometimes imagsize != filesize
 			DOS_ReadFile(fhandle, loadaddress, &readsize);
 			loadaddress += readsize;
 			}
 		if (head.relocations)
-			{																	// Relocate the exe image
+			{																		// Relocate the exe image
 			Bit16u relocate;
 			if (flags == OVERLAY)
 				relocate = block.overlay.relocation;
@@ -388,7 +389,7 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 			for (int i = 0; i < head.relocations; i++)
 				{
 				PhysPt address = SegOff2Ptr(RealSeg(relocpts[i])+loadseg, RealOff(relocpts[i]));
-				vPC_rStosw(address, vPC_rLodsw(address)+relocate);
+				Mem_Stosw(address, Mem_Lodsw(address)+relocate);
 				}
 			delete[] relocpts;
 			}
@@ -396,21 +397,21 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 	DOS_CloseFile(fhandle);
 
 	if (flags == OVERLAY)
-		return true;															// Everything done for overlays
+		return true;																// Everything done for overlays
 
-	SetupPSP(pspseg, memsize, envseg);											// Create psp after closing exe, to avoid dead file handle of exe in copied psp
+	SetupPSP(pspseg, memsize, envseg);												// Create psp after closing exe, to avoid dead file handle of exe in copied psp
 	SetupCMDLine(pspseg, block);
 	RealPt csip, sssp;
 	if (isCom)
 		{
 		csip = SegOff2dWord(pspseg, 0x100);
 		sssp = SegOff2dWord(pspseg, 0xfffe);
-		vPC_rStosw(SegOff2Ptr(pspseg, 0xfffe), 0);
+		Mem_Stosw(SegOff2Ptr(pspseg, 0xfffe), 0);
 		}
 	else
 		{
-		if (head.initSP < 4)
-			E_Exit("Initial SP value too low");
+//		if (head.initSP < 4)
+//			E_Exit("Initial SP value too low");
 		csip = SegOff2dWord(loadseg+head.initCS, head.initIP);
 		sssp = SegOff2dWord(loadseg+head.initSS, head.initSP);
 		}
@@ -427,7 +428,7 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 		DOS_PSP newpsp(dos.psp());
 		dos.dta(SegOff2dWord(newpsp.GetSegment(), 0x80));
 		// First word on the stack is the value ax should contain on startup
-		vPC_rStosw(RealSeg(sssp-2), RealOff(sssp-2), 0xffff);
+		Mem_Stosw(RealSeg(sssp-2), RealOff(sssp-2), 0xffff);
 		block.exec.initsssp = sssp-2;
 		block.exec.initcsip = csip;
 		block.SaveData();
@@ -436,10 +437,8 @@ bool DOS_Execute(char * name, PhysPt block_pt, Bit8u flags)
 
 	if (flags == LOADNGO)
 		{
-		if ((reg_sp > 0xfffe) || (reg_sp < 18))
-			LOG(LOG_EXEC, LOG_ERROR)("stack underflow/wrap at EXEC");
 		// Get Caller's program CS:IP of the stack and set termination address to that
-		RealSetVec(0x22, SegOff2dWord(vPC_rLodsw(SegPhys(ss)+reg_sp+2), vPC_rLodsw(SegPhys(ss)+reg_sp)));
+		RealSetVec(0x22, SegOff2dWord(Mem_Lodsw(SegPhys(ss)+reg_sp+2), Mem_Lodsw(SegPhys(ss)+reg_sp)));
 		SaveRegisters();
 		DOS_PSP callpsp(dos.psp());
 		// Save the SS:SP on the PSP of calling program

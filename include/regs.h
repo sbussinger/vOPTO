@@ -1,9 +1,7 @@
 #ifndef VDOS_REGS_H
 #define VDOS_REGS_H
 
-#ifndef VDOS_MEM_H
 #include "mem.h"
-#endif
 
 #define FLAG_CF		0x00000001
 #define FLAG_PF		0x00000004
@@ -64,22 +62,22 @@ struct CPU_Regs {
 extern Segments Segs;
 extern CPU_Regs cpu_regs;
 
-static inline PhysPt SegPhys(SegNames index)
+__forceinline PhysPt SegPhys(SegNames index)
 	{
 	return Segs.phys[index];
 	}
 
-static inline Bit16u SegValue(SegNames index)
+__forceinline Bit16u SegValue(SegNames index)
 	{
 	return (Bit16u)Segs.val[index];
 	}
 	
-static inline RealPt RealMakeSeg(SegNames index, Bit16u off)
+__forceinline RealPt RealMakeSeg(SegNames index, Bit16u off)
 	{
 	return SegOff2dWord(SegValue(index), off);	
 	}
 
-static inline void SegSet16(Bitu index, Bit16u val)
+__forceinline void SegSet16(Bitu index, Bit16u val)
 	{
 	Segs.val[index] = val;
 	Segs.phys[index] = val << 4;

@@ -134,11 +134,6 @@ bool localDrive::FindFirst(char* _dir, DOS_DTA & dta, bool fcb_findfirst)
 	
 	if (sAttr == DOS_ATTR_VOLUME)
 		{
-		if (strcmp(GetLabel(), "") == 0)
-			{
-			DOS_SetError(DOSERR_NO_MORE_FILES);
-			return false;
-			}
 		dta.SetResult(GetLabel(), 0, 0, 0, DOS_ATTR_VOLUME);
 		return true;
 		}
@@ -204,8 +199,12 @@ bool localDrive::FindNext(DOS_DTA & dta)
 		}
 	do
 		{
-		if (!isDosName(search_data.cFileName))
-			continue;
+		bool dosName = false;
+		if (!isDosName(search_data.cFileName))										// If it's not a DOS 8.3 name
+			if (!strchr(srch_pattern, '?') && !strchr(srch_pattern, '*'))			// We allow it only if Find was called to test the existance of a specific SFN name (no wildcards)
+				dosName = true;
+			else
+				continue;
 //		if (!(search_data.dwFileAttributes & srch_attr))
 //			continue;
 		if (search_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
@@ -218,7 +217,7 @@ bool localDrive::FindNext(DOS_DTA & dta)
 		char find_name[DOS_NAMELENGTH_ASCII];
 		Bit16u find_date,find_time;
 		Bit32u find_size;
-		strcpy(find_name, search_data.cFileName);
+		strcpy(find_name, dosName ? srch_pattern : search_data.cFileName);			// If LFN of a SFN was found, we can't use that, use the search pattern (has to be the SFN)
 		upcase(find_name);
 		find_size = search_data.nFileSizeLow;
 		FILETIME fTime;
@@ -286,12 +285,12 @@ bool localDrive::Rename(char* oldname, char* newname)
 	return (rename(strcat(strcpy(winold, basedir), oldname), strcat(strcpy(winnew, basedir), newname)) == 0);
 	}
 
-bool localDrive::AllocationInfo(Bit16u * _bytes_sector, Bit8u * _sectors_cluster, Bit16u * _total_clusters, Bit16u * _free_clusters)
+bool localDrive::AllocationInfo(Bit16u *bytes_sector, Bit8u *sectors_cluster, Bit16u *total_clusters, Bit16u *free_clusters)
 	{
-	*_bytes_sector = allocation.bytes_sector;
-	*_sectors_cluster = allocation.sectors_cluster;
-	*_total_clusters = allocation.total_clusters;
-	*_free_clusters = allocation.free_clusters;
+	*bytes_sector = 512;															// 512*127*1290 == ~80 MB total size, *1139  == ~70 MB free size
+	*sectors_cluster = 127;
+	*total_clusters = 1290;
+	*free_clusters = 1128;
 	return true;
 	}
 
@@ -302,20 +301,11 @@ bool localDrive::FileExists(const char* name)
 	return (stat(strcat(strcpy(win_name, basedir), name), &temp_stat) == 0) && !(temp_stat.st_mode & S_IFDIR);
 	}
 
-Bit8u localDrive::GetMediaByte(void)
-	{
-	return allocation.mediaid;
-	}
-
-localDrive::localDrive(const char* startdir, Bit16u _bytes_sector, Bit8u _sectors_cluster, Bit16u _total_clusters, Bit16u _free_clusters, Bit8u _mediaid)
+localDrive::localDrive(const char* startdir, const char* _label)
 	{
 	strcpy(basedir, startdir);
 	strcpy(info, startdir);
-	allocation.bytes_sector = _bytes_sector;
-	allocation.sectors_cluster = _sectors_cluster;
-	allocation.total_clusters = _total_clusters;
-	allocation.free_clusters = _free_clusters;
-	allocation.mediaid = _mediaid;
+	strcpy(label, _label);
 	while (Bit8u c = *startdir++)
 		VolSerial = c + (VolSerial << 6) + (VolSerial << 16) - VolSerial;
 	}

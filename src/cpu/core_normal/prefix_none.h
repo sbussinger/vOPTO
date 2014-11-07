@@ -20,7 +20,7 @@
 		AXIw(ADDW);
 		break;
 	CASE_W(0x06)												/* PUSH ES */		
-		Push_16(SegValue(es));
+		CPU_Push16(SegValue(es));
 		break;
 	CASE_W(0x07)												/* POP ES */
 		if (CPU_PopSeg(es, false))
@@ -45,7 +45,7 @@
 		AXIw(ORW);
 		break;
 	CASE_W(0x0e)												/* PUSH CS */		
-		Push_16(SegValue(cs));
+		CPU_Push16(SegValue(cs));
 		break;
 	CASE_B(0x10)												/* ADC Eb,Gb */
 		RMEbGb(ADCB);
@@ -66,7 +66,7 @@
 		AXIw(ADCW);
 		break;
 	CASE_W(0x16)												/* PUSH SS */		
-		Push_16(SegValue(ss));
+		CPU_Push16(SegValue(ss));
 		break;
 	CASE_W(0x17)												/* POP SS */		
 		if (CPU_PopSeg(ss, false))
@@ -92,7 +92,7 @@
 		AXIw(SBBW);
 		break;
 	CASE_W(0x1e)												/* PUSH DS */		
-		Push_16(SegValue(ds));
+		CPU_Push16(SegValue(ds));
 		break;
 	CASE_W(0x1f)												/* POP DS */
 		if (CPU_PopSeg(ds, false))
@@ -243,83 +243,83 @@
 		DECW(reg_di, LoadRw, SaveRw);
 		break;
 	CASE_W(0x50)												/* PUSH AX */
-		Push_16(reg_ax);
+		CPU_Push16(reg_ax);
 		break;
 	CASE_W(0x51)												/* PUSH CX */
-		Push_16(reg_cx);
+		CPU_Push16(reg_cx);
 		break;
 	CASE_W(0x52)												/* PUSH DX */
-		Push_16(reg_dx);
+		CPU_Push16(reg_dx);
 		break;
 	CASE_W(0x53)												/* PUSH BX */
-		Push_16(reg_bx);
+		CPU_Push16(reg_bx);
 		break;
 	CASE_W(0x54)												/* PUSH SP */
-		Push_16(reg_sp);
+		CPU_Push16(reg_sp);
 		break;
 	CASE_W(0x55)												/* PUSH BP */
-		Push_16(reg_bp);
+		CPU_Push16(reg_bp);
 		break;
 	CASE_W(0x56)												/* PUSH SI */
-		Push_16(reg_si);
+		CPU_Push16(reg_si);
 		break;
 	CASE_W(0x57)												/* PUSH DI */
-		Push_16(reg_di);
+		CPU_Push16(reg_di);
 		break;
 	CASE_W(0x58)												/* POP AX */
-		reg_ax = Pop_16();
+		reg_ax = CPU_Pop16();
 		break;
 	CASE_W(0x59)												/* POP CX */
-		reg_cx = Pop_16();
+		reg_cx = CPU_Pop16();
 		break;
 	CASE_W(0x5a)												/* POP DX */
-		reg_dx = Pop_16();
+		reg_dx = CPU_Pop16();
 		break;
 	CASE_W(0x5b)												/* POP BX */
-		reg_bx = Pop_16();
+		reg_bx = CPU_Pop16();
 		break;
 	CASE_W(0x5c)												/* POP SP */
-		reg_sp = Pop_16();
+		reg_sp = CPU_Pop16();
 		break;
 	CASE_W(0x5d)												/* POP BP */
-		reg_bp = Pop_16();
+		reg_bp = CPU_Pop16();
 		break;
 	CASE_W(0x5e)												/* POP SI */
-		reg_si = Pop_16();
+		reg_si = CPU_Pop16();
 		break;
 	CASE_W(0x5f)												/* POP DI */
-		reg_di = Pop_16();
+		reg_di = CPU_Pop16();
 		break;
 	CASE_W(0x60)												/* PUSHA */
 		{
 		Bit16u old_sp = reg_sp;
-		Push_16(reg_ax);
-		Push_16(reg_cx);
-		Push_16(reg_dx);
-		Push_16(reg_bx);
-		Push_16(old_sp);
-		Push_16(reg_bp);
-		Push_16(reg_si);
-		Push_16(reg_di);
+		CPU_Push16(reg_ax);
+		CPU_Push16(reg_cx);
+		CPU_Push16(reg_dx);
+		CPU_Push16(reg_bx);
+		CPU_Push16(old_sp);
+		CPU_Push16(reg_bp);
+		CPU_Push16(reg_si);
+		CPU_Push16(reg_di);
 		}
 		break;
 	CASE_W(0x61)												/* POPA */
-		reg_di = Pop_16();
-		reg_si = Pop_16();
-		reg_bp = Pop_16();
-		Pop_16();			// Don't pop SP
-		reg_bx = Pop_16();
-		reg_dx = Pop_16();
-		reg_cx = Pop_16();
-		reg_ax = Pop_16();
+		reg_di = CPU_Pop16();
+		reg_si = CPU_Pop16();
+		reg_bp = CPU_Pop16();
+		CPU_Pop16();			// Don't pop SP
+		reg_bx = CPU_Pop16();
+		reg_dx = CPU_Pop16();
+		reg_cx = CPU_Pop16();
+		reg_ax = CPU_Pop16();
 		break;
 	CASE_W(0x62)												/* BOUND */
 		{
 		Bit16s bound_min, bound_max;
 		GetRMrw;
 		GetEAa;
-		bound_min = vPC_rLodsw(eaa);
-		bound_max = vPC_rLodsw(eaa+2);
+		bound_min = Mem_Lodsw(eaa);
+		bound_max = Mem_Lodsw(eaa+2);
 		if ((((Bit16s)*rmrw) < bound_min) || (((Bit16s)*rmrw) > bound_max))
 			EXCEPTION(5);
 		}
@@ -339,9 +339,9 @@
 		else
 			{
 			GetEAa;
-			Bitu new_sel = vPC_rLodsw(eaa);
+			Bitu new_sel = Mem_Lodsw(eaa);
 			CPU_ARPL(new_sel, *rmrw);
-			SaveMw(eaa, (Bit16u)new_sel);
+			Mem_Stosw(eaa, (Bit16u)new_sel);
 			}
 		}
 		break;
@@ -357,13 +357,13 @@
 	CASE_B(0x67)												/* Address Size Prefix */
 		DO_PREFIX_ADDR();
 	CASE_W(0x68)												/* PUSH Iw */
-		Push_16(Fetchw());
+		CPU_Push16(Fetchw());
 		break;
 	CASE_W(0x69)												/* IMUL Gw,Ew,Iw */
 		RMGwEwOp3(DIMULW, Fetchws());
 		break;
 	CASE_W(0x6a)												/* PUSH Ib */
-		Push_16(Fetchbs());
+		CPU_Push16(Fetchbs());
 		break;
 	CASE_W(0x6b)												/* IMUL Gw,Ew,Ib */
 		RMGwEwOp3(DIMULW, Fetchbs());
@@ -447,14 +447,14 @@
 			Bit8u ib = Fetchb();
 			switch (which)
 				{
-				case 0x00:ADDB(eaa,ib,vPC_rLodsb,SaveMb);break;
-				case 0x01: ORB(eaa,ib,vPC_rLodsb,SaveMb);break;
-				case 0x02:ADCB(eaa,ib,vPC_rLodsb,SaveMb);break;
-				case 0x03:SBBB(eaa,ib,vPC_rLodsb,SaveMb);break;
-				case 0x04:ANDB(eaa,ib,vPC_rLodsb,SaveMb);break;
-				case 0x05:SUBB(eaa,ib,vPC_rLodsb,SaveMb);break;
-				case 0x06:XORB(eaa,ib,vPC_rLodsb,SaveMb);break;
-				case 0x07:CMPB(eaa,ib,vPC_rLodsb,SaveMb);break;
+				case 0x00:ADDB(eaa,ib,Mem_Lodsb,Mem_Stosb);break;
+				case 0x01: ORB(eaa,ib,Mem_Lodsb,Mem_Stosb);break;
+				case 0x02:ADCB(eaa,ib,Mem_Lodsb,Mem_Stosb);break;
+				case 0x03:SBBB(eaa,ib,Mem_Lodsb,Mem_Stosb);break;
+				case 0x04:ANDB(eaa,ib,Mem_Lodsb,Mem_Stosb);break;
+				case 0x05:SUBB(eaa,ib,Mem_Lodsb,Mem_Stosb);break;
+				case 0x06:XORB(eaa,ib,Mem_Lodsb,Mem_Stosb);break;
+				case 0x07:CMPB(eaa,ib,Mem_Lodsb,Mem_Stosb);break;
 				}
 			}
 		break;
@@ -485,14 +485,14 @@
 			Bit16u iw = Fetchw();
 			switch (which)
 				{
-				case 0x00:ADDW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x01: ORW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x02:ADCW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x03:SBBW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x04:ANDW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x05:SUBW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x06:XORW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x07:CMPW(eaa,iw,vPC_rLodsw,SaveMw);break;
+				case 0x00:ADDW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x01: ORW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x02:ADCW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x03:SBBW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x04:ANDW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x05:SUBW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x06:XORW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x07:CMPW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
 				}
 			}
 		break;
@@ -523,14 +523,14 @@
 			Bit16u iw = (Bit16s)Fetchbs();
 			switch (which)
 				{
-				case 0x00:ADDW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x01: ORW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x02:ADCW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x03:SBBW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x04:ANDW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x05:SUBW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x06:XORW(eaa,iw,vPC_rLodsw,SaveMw);break;
-				case 0x07:CMPW(eaa,iw,vPC_rLodsw,SaveMw);break;
+				case 0x00:ADDW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x01: ORW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x02:ADCW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x03:SBBW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x04:ANDW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x05:SUBW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x06:XORW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
+				case 0x07:CMPW(eaa,iw,Mem_Lodsw,Mem_Stosw);break;
 				}
 			}
 		break;
@@ -554,8 +554,8 @@
 		else
 			{
 			GetEAa;
-			*rmrb = vPC_rLodsb(eaa);
-			SaveMb(eaa, oldrmrb);
+			*rmrb = Mem_Lodsb(eaa);
+			Mem_Stosb(eaa, oldrmrb);
 			}
 		break;
 		}
@@ -572,8 +572,8 @@
 		else
 			{
 			GetEAa;
-			*rmrw = vPC_rLodsw(eaa);
-			SaveMw(eaa, oldrmrw);
+			*rmrw = Mem_Lodsw(eaa);
+			Mem_Stosw(eaa, oldrmrw);
 			}
 		break;
 		}
@@ -601,7 +601,7 @@
 					}
 				}
 			GetEAa;
-			SaveMb(eaa, *rmrb);
+			Mem_Stosb(eaa, *rmrb);
 			}
 			break;
 		}
@@ -616,7 +616,7 @@
 		else
 			{
 			GetEAa;
-			SaveMw(eaa, *rmrw);
+			Mem_Stosw(eaa, *rmrw);
 			}
 		break;
 		}
@@ -631,7 +631,7 @@
 		else
 			{
 			GetEAa;
-			*rmrb = vPC_rLodsb(eaa);
+			*rmrb = Mem_Lodsb(eaa);
 			}
 		break;
 		}
@@ -646,7 +646,7 @@
 		else
 			{
 			GetEAa;
-			*rmrw = vPC_rLodsw(eaa);
+			*rmrw = Mem_Lodsw(eaa);
 			}
 		break;
 		}
@@ -681,7 +681,7 @@
 		else
 			{
 			GetEAa;
-			SaveMw(eaa, val);
+			Mem_Stosw(eaa, val);
 			}
 		break;
 		}
@@ -709,7 +709,7 @@
 		else
 			{
 			GetEAa;
-			val = vPC_rLodsw(eaa);
+			val = Mem_Lodsw(eaa);
 			}
 		switch (which)
 			{
@@ -729,7 +729,7 @@
 		}							
 	CASE_W(0x8f)												/* POP Ew */
 		{
-		Bit16u val = Pop_16();
+		Bit16u val = CPU_Pop16();
 		GetRM;
 		if (rm >= 0xc0)
 			{
@@ -739,7 +739,7 @@
 		else
 			{
 			GetEAa;
-			SaveMw(eaa, val);
+			Mem_Stosw(eaa, val);
 			}
 		break;
 		}
@@ -847,25 +847,25 @@
 	CASE_B(0xa0)												/* MOV AL,Ob */
 		{
 		GetEADirect;
-		reg_al = vPC_rLodsb(eaa);
+		reg_al = Mem_Lodsb(eaa);
 		}
 		break;
 	CASE_W(0xa1)												/* MOV AX,Ow */
 		{
 		GetEADirect;
-		reg_ax = vPC_rLodsw(eaa);
+		reg_ax = Mem_Lodsw(eaa);
 		}
 		break;
 	CASE_B(0xa2)												/* MOV Ob,AL */
 		{
 		GetEADirect;
-		SaveMb(eaa, reg_al);
+		Mem_Stosb(eaa, reg_al);
 		}
 		break;
 	CASE_W(0xa3)												/* MOV Ow,AX */
 		{
 		GetEADirect;
-		SaveMw(eaa, reg_ax);
+		Mem_Stosw(eaa, reg_ax);
 		}
 		break;
 	CASE_B(0xa4)												/* MOVSB */
@@ -959,11 +959,11 @@
 		GRP2W(Fetchb());
 		break;
 	CASE_W(0xc2)												/* RETN Iw */
-		reg_eip = Pop_16();
+		reg_eip = CPU_Pop16();
 		reg_esp += Fetchw();
 		continue;
 	CASE_W(0xc3)												/* RETN */
-		reg_eip = Pop_16();
+		reg_eip = CPU_Pop16();
 		continue;
 	CASE_W(0xc4)												/* LES */
 		{	
@@ -971,9 +971,9 @@
 		if (rm >= 0xc0)
 			goto illegal_opcode;
 		GetEAa;
-		if (CPU_SetSegGeneral(es, vPC_rLodsw(eaa+2)))
+		if (CPU_SetSegGeneral(es, Mem_Lodsw(eaa+2)))
 			RUNEXCEPTION();
-		*rmrw = vPC_rLodsw(eaa);
+		*rmrw = Mem_Lodsw(eaa);
 		break;
 		}
 	CASE_W(0xc5)												/* LDS */
@@ -982,9 +982,9 @@
 		if (rm >= 0xc0)
 			goto illegal_opcode;
 		GetEAa;
-		if (CPU_SetSegGeneral(ds, vPC_rLodsw(eaa+2)))
+		if (CPU_SetSegGeneral(ds, Mem_Lodsw(eaa+2)))
 			RUNEXCEPTION();
-		*rmrw = vPC_rLodsw(eaa);
+		*rmrw = Mem_Lodsw(eaa);
 		break;
 		}
 	CASE_B(0xc6)												/* MOV Eb,Ib */
@@ -998,7 +998,7 @@
 		else
 			{
 			GetEAa;
-			SaveMb(eaa, Fetchb());
+			Mem_Stosb(eaa, Fetchb());
 			}
 		break;
 		}
@@ -1013,7 +1013,7 @@
 		else
 			{
 			GetEAa;
-			SaveMw(eaa, Fetchw());
+			Mem_Stosw(eaa, Fetchw());
 			}
 		break;
 		}
@@ -1027,7 +1027,7 @@
 	CASE_W(0xc9)												/* LEAVE */
 		reg_esp &= cpu.stack.notmask;
 		reg_esp |= (reg_ebp&cpu.stack.mask);
-		reg_bp = Pop_16();
+		reg_bp = CPU_Pop16();
 		break;
 	CASE_W(0xca)												/* RETF Iw */
 		{
@@ -1104,9 +1104,9 @@
 		break;
 	CASE_B(0xd7)												/* XLAT */
 		if (TEST_PREFIX_ADDR)
-			reg_al = vPC_rLodsb(BaseDS+(Bit32u)(reg_ebx+reg_al));
+			reg_al = Mem_Lodsb(BaseDS+(Bit32u)(reg_ebx+reg_al));
 		else
-			reg_al = vPC_rLodsb(BaseDS+(Bit16u)(reg_bx+reg_al));
+			reg_al = Mem_Lodsb(BaseDS+(Bit16u)(reg_bx+reg_al));
 		break;
 	CASE_B(0xd8)												// FPU ESC 0
 	CASE_B(0xd9)												// FPU ESC 1
@@ -1205,7 +1205,7 @@
 		{ 
 		Bit16u addip = Fetchws();
 		SAVEIP;
-		Push_16(reg_eip);
+		CPU_Push16(reg_eip);
 		reg_eip = (Bit16u)(reg_eip+addip);
 		continue;
 		}
@@ -1297,7 +1297,7 @@
 			else
 				{
 				GetEAa;
-				TESTB(eaa, Fetchb(), vPC_rLodsb, 0);
+				TESTB(eaa, Fetchb(), Mem_Lodsb, 0);
 				}
 			break;
 			}
@@ -1311,7 +1311,7 @@
 			else
 				{
 				GetEAa;
-				SaveMb(eaa, ~vPC_rLodsb(eaa));
+				Mem_Stosb(eaa, ~Mem_Lodsb(eaa));
 				}
 			break;
 			}
@@ -1328,9 +1328,9 @@
 			else
 				{
 				GetEAa;
-				lf_var1b = vPC_rLodsb(eaa);
+				lf_var1b = Mem_Lodsb(eaa);
 				lf_resb = 0-lf_var1b;
- 				SaveMb(eaa, lf_resb);
+ 				Mem_Stosb(eaa, lf_resb);
 				}
 			break;
 			}
@@ -1366,7 +1366,7 @@
 			else
 				{
 				GetEAa;
-				TESTW(eaa, Fetchw(), vPC_rLodsw, SaveMw);
+				TESTW(eaa, Fetchw(), Mem_Lodsw, Mem_Stosw);
 				}
 			break;
 			}
@@ -1380,7 +1380,7 @@
 			else
 				{
 				GetEAa;
-				SaveMw(eaa, ~vPC_rLodsw(eaa));
+				Mem_Stosw(eaa, ~Mem_Lodsw(eaa));
 				}
 			break;
 			}
@@ -1397,9 +1397,9 @@
 			else
 				{
 				GetEAa;
-				lf_var1w = vPC_rLodsw(eaa);
+				lf_var1w = Mem_Lodsw(eaa);
 				lf_resw = 0-lf_var1w;
- 				SaveMw(eaa, lf_resw);
+ 				Mem_Stosw(eaa, lf_resw);
 				}
 			break;
 			}
@@ -1492,17 +1492,17 @@
 			else
 				{
 				GetEAa;
-				reg_eip = vPC_rLodsw(eaa);
+				reg_eip = Mem_Lodsw(eaa);
 				}
-			Push_16(GETIP);
+			CPU_Push16(GETIP);
 			continue;
 		case 0x03:										/* CALL Ep */
 			{
 			if (rm >= 0xc0)
 				goto illegal_opcode;
 			GetEAa;
-			Bit16u newip = vPC_rLodsw(eaa);
-			Bit16u newcs = vPC_rLodsw(eaa+2);
+			Bit16u newip = Mem_Lodsw(eaa);
+			Bit16u newcs = Mem_Lodsw(eaa+2);
 			FillFlags();
 			CPU_CALL(false, newcs, newip, GETIP);
 #if CPU_TRAP_CHECK
@@ -1523,7 +1523,7 @@
 			else
 				{
 				GetEAa;
-				reg_eip = vPC_rLodsw(eaa);
+				reg_eip = Mem_Lodsw(eaa);
 				}
 			continue;
 		case 0x05:										/* JMP Ep */	
@@ -1531,8 +1531,8 @@
 			if (rm >= 0xc0)
 				goto illegal_opcode;
 			GetEAa;
-			Bit16u newip = vPC_rLodsw(eaa);
-			Bit16u newcs = vPC_rLodsw(eaa+2);
+			Bit16u newip = Mem_Lodsw(eaa);
+			Bit16u newcs = Mem_Lodsw(eaa+2);
 			FillFlags();
 			CPU_JMP(false, newcs, newip);
 #if CPU_TRAP_CHECK
@@ -1548,12 +1548,12 @@
 			if (rm >= 0xc0)
 				{
 				GetEArw;
-				Push_16(*earw);
+				CPU_Push16(*earw);
 				}
 			else
 				{
 				GetEAa;
-				Push_16(vPC_rLodsw(eaa));
+				CPU_Push16(Mem_Lodsw(eaa));
 				}
 			break;
 		default:

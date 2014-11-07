@@ -384,29 +384,19 @@ bool DOS_LinkUMBsToMemChain(Bit16u linkstate)
 
 static Bitu DOS_default_handler(void)
 	{
-	LOG(LOG_CPU, LOG_ERROR)("DOS rerouted Interrupt Called %X", lastint);
 	return CBRET_NONE;
 	}
-
-static	CALLBACK_HandlerObject callbackhandler;
 
 void DOS_SetupMemory(bool low)
 	{
 	/* Let DOS claim a few bios interrupts. Makes vDos more compatible with 
 	 * buggy games, which compare against the interrupt table. (probably a 
 	 * broken linked list implementation) */
-	callbackhandler.Allocate(&DOS_default_handler, "DOS default int");
-	Bit16u ihseg = 0x70;
-	Bit16u ihofs = 0x08;
-	vPC_rStosb(ihseg, ihofs+0x00, (Bit8u)0xFE);						// GRP 4
-	vPC_rStosb(ihseg, ihofs+0x01, (Bit8u)0x38);						// Extra Callback instruction
-	vPC_rStosw(ihseg, ihofs+0x02, callbackhandler.Get_callback());	// The immediate word
-	vPC_rStosb(ihseg, ihofs+0x04, (Bit8u)0xCF);						// An IRET Instruction
-	RealSetVec(0x01, SegOff2dWord(ihseg, ihofs));					// BioMenace (offset!=4)
-	RealSetVec(0x02, SegOff2dWord(ihseg, ihofs));					// BioMenace (segment<0x8000)
-	RealSetVec(0x03, SegOff2dWord(ihseg, ihofs));					// Alien Incident (offset!=0)
-	RealSetVec(0x04, SegOff2dWord(ihseg, ihofs));					// Shadow President (lower byte of segment!=0)
-//	RealSetVec(0x0f, SegOff2dWord(ihseg, ihofs));					// Always a tricky one (soundblaster irq)
+	Bitu cbID = CALLBACK_Allocate();												// DOS default int
+	CALLBACK_Setup(cbID, &DOS_default_handler, CB_IRET, 0x708);
+	RealSetVec(0x01, 0x700008);
+	RealSetVec(0x03, 0x700008);
+	RealSetVec(0x04, 0x700008);
 
 	// Create a dummy device MCB with PSPSeg=0x0008
 	DOS_MCB mcb_devicedummy((Bit16u)DOS_MEM_START);

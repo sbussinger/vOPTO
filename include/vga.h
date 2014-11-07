@@ -8,7 +8,7 @@
 class PageHandler;
 
 enum VGAModes {
-	M_EGA, M_VGA,
+	M_EGA,
 	M_TEXT,
 	M_ERROR
 };
@@ -23,10 +23,6 @@ typedef struct {
 	bool retrace;																	// A retrace is active
 	Bitu scan_len;
 	Bitu cursor_start;
-
-	// Some other screen related variables
-//	Bitu line_compare;
-	bool chained;																	// Enable or Disabled Chain 4 Mode
 
 	// Specific stuff memory write/read handling
 	Bit8u read_mode;
@@ -50,35 +46,13 @@ typedef struct {
 	bool resizing;
 	Bitu width;
 	Bitu height;
-	Bitu blocks;
-	Bitu address;
-	Bit8u *linear_base;
-	Bitu linear_mask;
-	Bitu address_add;
-	Bitu line_length;
-	Bitu address_line_total;
-	Bitu address_line;
-	Bitu lines_total;
-	Bitu lines_done;
-	struct {
-		double framestart;
-		double vrstart, vrend;														// V-retrace
-		double vdend, vtotal;
-		double htotal;
-		float singleline_delay;
-	} delay;
-	bool doublescan_merging;
 	Bit8u font[64*1024];
-	Bit8u * font_tables[2];
-	Bitu blinking;
-	bool blink;
+	bool vertRetrace;
 	struct {
 		Bitu address;
 		Bit8u sline, eline;
-		Bit8u count, delay;
 		Bit8u enabled;
 	} cursor;
-	bool vret_triggered;
 } VGA_Draw;
 
 typedef struct {
@@ -148,13 +122,11 @@ typedef struct  {
 } RGBEntry;
 
 typedef struct {
-//	Bit8u bits;						/* DAC bits, usually 6 or 8 */
 	Bit8u pel_mask;
 	Bit8u pel_index;	
 	Bit8u state;
 	Bit8u write_index;
 	Bit8u read_index;
-//	Bitu first_changed;
 	Bit8u combine[16];
 	RGBEntry rgb[0x100];
 	Bit16u xlat16[256];
@@ -168,12 +140,7 @@ typedef union {
 } VGA_Latch;
 
 typedef struct {
-	Bit8u* linear;
-	Bit8u* linear_orgptr;
-} VGA_Memory;
-
-typedef struct {
-	VGAModes mode;			// The mode the vga system is in
+	VGAModes mode;																	// The mode the vga system is in
 	Bit8u misc_output;
 	VGA_Draw draw;
 	VGA_Config config;
@@ -185,20 +152,17 @@ typedef struct {
 	VGA_Gfx gfx;
 	VGA_Dac dac;
 	VGA_Latch latch;
-	VGA_Memory mem;
-	Bit32u vmemwrap;		// this is assumed to be power of 2
-	Bit8u* fastmem;			// memory for fast (usually 16-color) rendering, always twice as big as vmemsize
-	Bit8u* fastmem_orgptr;
+	Bit8u* memlinear;
+	Bit8u* fastmem;																	// Memory for fast (usually 16-color) rendering, always twice as big as vmemsize
 	Bit32u vmemsize;
 } VGA_Type;
 
-// Functions for different resolutions
 void VGA_SetMode(VGAModes mode);
 void VGA_DetermineMode(void);
 void VGA_SetupHandlers(void);
-void VGA_StartResize(Bitu delay=50);
-void VGA_SetupDrawing(Bitu val);
-void VGA_CheckScanLength(void);
+void VGA_StartResize(void);
+void VGA_ForceUpdate(void);
+void VGA_ResetVertTimer(bool delay);
 
 // Some DAC/Attribute functions
 void VGA_DAC_CombineColor(Bit8u attr,Bit8u pal);
@@ -213,10 +177,6 @@ void VGA_SetupMisc(void);
 void VGA_SetupGFX(void);
 void VGA_SetupSEQ(void);
 void VGA_SetupOther(void);
-
-// Some Support Functions
-void VGA_SetBlinking(Bitu enabled);
-void VGA_KillDrawing(void);
 
 extern VGA_Type vga;
 

@@ -254,12 +254,12 @@ static Bit8u video_parameter_table_vga[0x40*0x1d]={
 
 Bit16u INT10_SetupVideoParameterTable(PhysPt basepos)
 	{
-	phys_writes(basepos, (const char*)video_parameter_table_vga, sizeof(video_parameter_table_vga));
+	Mem_aWrites(basepos, (const char*)video_parameter_table_vga, sizeof(video_parameter_table_vga));
 	return sizeof(video_parameter_table_vga);
 	}
 
 void INT10_SetupBasicVideoParameterTable(void)
 	{
 	RealSetVec(0x1d, SegOff2dWord(0xF000, 0xF0A4));		// video parameter table at F000:F0A4
-	phys_writes(0xFF0A4, (const char*)vparams, sizeof(vparams));
+	Mem_aWrites(0xFF0A4, (const char*)vparams, sizeof(vparams));
 	}

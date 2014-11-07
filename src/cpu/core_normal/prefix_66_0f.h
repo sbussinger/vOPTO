@@ -11,7 +11,7 @@
 					if (!which) saveval=CPU_SLDT();
 					else saveval=CPU_STR();
 					if (rm >= 0xc0) {GetEArw;*earw=(Bit16u)saveval;}
-					else {GetEAa;SaveMw(eaa,saveval);}
+					else {GetEAa;Mem_Stosw(eaa,saveval);}
 				}
 				break;
 			case 0x02:case 0x03:case 0x04:case 0x05:
@@ -19,7 +19,7 @@
 					/* Just use 16-bit loads since were only using selectors */
 					Bitu loadval;
 					if (rm >= 0xc0 ) {GetEArw;loadval=*earw;}
-					else {GetEAa;loadval=vPC_rLodsw(eaa);}
+					else {GetEAa;loadval=Mem_Lodsw(eaa);}
 					switch (which) {
 					case 0x02:
 						if (cpu.cpl) EXCEPTION(EXCEPTION_GP);
@@ -51,26 +51,26 @@
 				GetEAa;Bitu limit;
 				switch (which) {
 				case 0x00:										/* SGDT */
-					SaveMw(eaa,(Bit16u)CPU_SGDT_limit());
-					SaveMd(eaa+2,(Bit32u)CPU_SGDT_base());
+					Mem_Stosw(eaa,(Bit16u)CPU_SGDT_limit());
+					Mem_Stosd(eaa+2,(Bit32u)CPU_SGDT_base());
 					break;
 				case 0x01:										/* SIDT */
-					SaveMw(eaa,(Bit16u)CPU_SIDT_limit());
-					SaveMd(eaa+2,(Bit32u)CPU_SIDT_base());
+					Mem_Stosw(eaa,(Bit16u)CPU_SIDT_limit());
+					Mem_Stosd(eaa+2,(Bit32u)CPU_SIDT_base());
 					break;
 				case 0x02:										/* LGDT */
 					if (cpu.pmode && cpu.cpl) EXCEPTION(EXCEPTION_GP);
-					CPU_LGDT(vPC_rLodsw(eaa),vPC_rLodsd(eaa+2));
+					CPU_LGDT(Mem_Lodsw(eaa),Mem_Lodsd(eaa+2));
 					break;
 				case 0x03:										/* LIDT */
 					if (cpu.pmode && cpu.cpl) EXCEPTION(EXCEPTION_GP);
-					CPU_LIDT(vPC_rLodsw(eaa),vPC_rLodsd(eaa+2));
+					CPU_LIDT(Mem_Lodsw(eaa),Mem_Lodsd(eaa+2));
 					break;
 				case 0x04:										/* SMSW */
-					SaveMw(eaa,(Bit16u)CPU_SMSW());
+					Mem_Stosw(eaa,(Bit16u)CPU_SMSW());
 					break;
 				case 0x06:										/* LMSW */
-					limit=vPC_rLodsw(eaa);
+					limit=Mem_Lodsw(eaa);
 					if (CPU_LMSW((Bit16u)limit)) RUNEXCEPTION();
 					break;
 				case 0x07:										/* INVLPG */
@@ -110,7 +110,7 @@
 			if (rm >= 0xc0) {
 				GetEArw;CPU_LAR(*earw,ar);
 			} else {
-				GetEAa;CPU_LAR(vPC_rLodsw(eaa),ar);
+				GetEAa;CPU_LAR(Mem_Lodsw(eaa),ar);
 			}
 			*rmrd=(Bit32u)ar;
 		}
@@ -124,7 +124,7 @@
 			if (rm >= 0xc0) {
 				GetEArw;CPU_LSL(*earw,limit);
 			} else {
-				GetEAa;CPU_LSL(vPC_rLodsw(eaa),limit);
+				GetEAa;CPU_LSL(Mem_Lodsw(eaa),limit);
 			}
 			*rmrd=(Bit32u)limit;
 		}
@@ -163,7 +163,7 @@
 		JumpCond32_d(TFLG_NLE);break;
 	
 	CASE_0F_D(0xa0)												/* PUSH FS */		
-		Push_32(SegValue(fs));break;
+		CPU_Push32(SegValue(fs));break;
 	CASE_0F_D(0xa1)												/* POP FS */		
 		if (CPU_PopSeg(fs,true)) RUNEXCEPTION();
 		break;
@@ -176,7 +176,7 @@
 				SETFLAGBIT(CF,(*eard & mask));
 			} else {
 				GetEAa;eaa+=(((Bit32s)*rmrd)>>5)*4;
-				Bit32u old=vPC_rLodsd(eaa);
+				Bit32u old=Mem_Lodsd(eaa);
 				SETFLAGBIT(CF,(old & mask));
 			}
 			break;
@@ -188,7 +188,7 @@
 		RMEdGdOp3(DSHLD,reg_cl);
 		break;
 	CASE_0F_D(0xa8)												/* PUSH GS */		
-		Push_32(SegValue(gs));break;
+		CPU_Push32(SegValue(gs));break;
 	CASE_0F_D(0xa9)												/* POP GS */		
 		if (CPU_PopSeg(gs,true)) RUNEXCEPTION();
 		break;
@@ -202,9 +202,9 @@
 				*eard|=mask;
 			} else {
 				GetEAa;eaa+=(((Bit32s)*rmrd)>>5)*4;
-				Bit32u old=vPC_rLodsd(eaa);
+				Bit32u old=Mem_Lodsd(eaa);
 				SETFLAGBIT(CF,(old & mask));
-				SaveMd(eaa,old | mask);
+				Mem_Stosd(eaa,old | mask);
 			}
 			break;
 		}
@@ -227,8 +227,8 @@
 			GetRMrd;
 			if (rm >= 0xc0) goto illegal_opcode;
 			GetEAa;
-			if (CPU_SetSegGeneral(ss,vPC_rLodsw(eaa+4))) RUNEXCEPTION();
-			*rmrd=vPC_rLodsd(eaa);
+			if (CPU_SetSegGeneral(ss,Mem_Lodsw(eaa+4))) RUNEXCEPTION();
+			*rmrd=Mem_Lodsd(eaa);
 			break;
 		}
 	CASE_0F_D(0xb3)												/* BTR Ed,Gd */
@@ -241,9 +241,9 @@
 				*eard&= ~mask;
 			} else {
 				GetEAa;eaa+=(((Bit32s)*rmrd)>>5)*4;
-				Bit32u old=vPC_rLodsd(eaa);
+				Bit32u old=Mem_Lodsd(eaa);
 				SETFLAGBIT(CF,(old & mask));
-				SaveMd(eaa,old & ~mask);
+				Mem_Stosd(eaa,old & ~mask);
 			}
 			break;
 		}
@@ -252,8 +252,8 @@
 			GetRMrd;
 			if (rm >= 0xc0) goto illegal_opcode;
 			GetEAa;
-			if (CPU_SetSegGeneral(fs,vPC_rLodsw(eaa+4))) RUNEXCEPTION();
-			*rmrd=vPC_rLodsd(eaa);
+			if (CPU_SetSegGeneral(fs,Mem_Lodsw(eaa+4))) RUNEXCEPTION();
+			*rmrd=Mem_Lodsd(eaa);
 			break;
 		}
 	CASE_0F_D(0xb5)												/* LGS Ed */
@@ -261,22 +261,22 @@
 			GetRMrd;
 			if (rm >= 0xc0) goto illegal_opcode;
 			GetEAa;
-			if (CPU_SetSegGeneral(gs,vPC_rLodsw(eaa+4))) RUNEXCEPTION();
-			*rmrd=vPC_rLodsd(eaa);
+			if (CPU_SetSegGeneral(gs,Mem_Lodsw(eaa+4))) RUNEXCEPTION();
+			*rmrd=Mem_Lodsd(eaa);
 			break;
 		}
 	CASE_0F_D(0xb6)												/* MOVZX Gd,Eb */
 		{
 			GetRMrd;															
 			if (rm >= 0xc0 ) {GetEArb;*rmrd=*earb;}
-			else {GetEAa;*rmrd=vPC_rLodsb(eaa);}
+			else {GetEAa;*rmrd=Mem_Lodsb(eaa);}
 			break;
 		}
 	CASE_0F_D(0xb7)												/* MOVXZ Gd,Ew */
 		{
 			GetRMrd;
 			if (rm >= 0xc0 ) {GetEArw;*rmrd=*earw;}
-			else {GetEAa;*rmrd=vPC_rLodsw(eaa);}
+			else {GetEAa;*rmrd=Mem_Lodsw(eaa);}
 			break;
 		}
 	CASE_0F_D(0xba)												/* GRP8 Ed,Ib */
@@ -303,22 +303,22 @@
 					E_Exit("CPU:66:0F:BA: Illegal subfunction %X",rm & 0x38);
 				}
 			} else {
-				GetEAa;Bit32u old=vPC_rLodsd(eaa);
+				GetEAa;Bit32u old=Mem_Lodsd(eaa);
 				Bit32u mask=1 << (Fetchb() & 31);
 				SETFLAGBIT(CF,(old & mask));
 				switch (rm & 0x38) {
 				case 0x20:											/* BT */
 					break;
 				case 0x28:											/* BTS */
-					SaveMd(eaa,old|mask);
+					Mem_Stosd(eaa,old|mask);
 					break;
 				case 0x30:											/* BTR */
-					SaveMd(eaa,old & ~mask);
+					Mem_Stosd(eaa,old & ~mask);
 					break;
 				case 0x38:											/* BTC */
 					if (GETFLAG(CF)) old&=~mask;
 					else old|=mask;
-					SaveMd(eaa,old);
+					Mem_Stosd(eaa,old);
 					break;
 				default:
 					E_Exit("CPU:66:0F:BA: Illegal subfunction %X",rm & 0x38);
@@ -336,9 +336,9 @@
 				*eard^=mask;
 			} else {
 				GetEAa;eaa+=(((Bit32s)*rmrd)>>5)*4;
-				Bit32u old=vPC_rLodsd(eaa);
+				Bit32u old=Mem_Lodsd(eaa);
 				SETFLAGBIT(CF,(old & mask));
-				SaveMd(eaa,old ^ mask);
+				Mem_Stosd(eaa,old ^ mask);
 			}
 			break;
 		}
@@ -347,7 +347,7 @@
 			GetRMrd;
 			Bit32u result,value;
 			if (rm >= 0xc0) { GetEArd; value=*eard; } 
-			else			{ GetEAa; value=vPC_rLodsd(eaa); }
+			else			{ GetEAa; value=Mem_Lodsd(eaa); }
 			if (value==0) {
 				SETFLAGBIT(ZF,true);
 			} else {
@@ -364,7 +364,7 @@
 			GetRMrd;
 			Bit32u result,value;
 			if (rm >= 0xc0) { GetEArd; value=*eard; } 
-			else			{ GetEAa; value=vPC_rLodsd(eaa); }
+			else			{ GetEAa; value=Mem_Lodsd(eaa); }
 			if (value==0) {
 				SETFLAGBIT(ZF,true);
 			} else {

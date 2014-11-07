@@ -85,8 +85,8 @@ CParallel::CParallel(Bitu portno, device_PRT* dosdevice)
 
 	for (Bitu i = 0; i < 3; i++)
 		{
-		WriteHandler[i].Install(i + base, PARALLEL_Write, IO_MB);
-		ReadHandler[i].Install(i + base, PARALLEL_Read, IO_MB);
+		WriteHandler[i].Install(i + base, PARALLEL_Write);
+		ReadHandler[i].Install(i + base, PARALLEL_Read);
 		}
 	BIOS_SetLPTPort(portnum, base);
 	mydosdevice = dosdevice;

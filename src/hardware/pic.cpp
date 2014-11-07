@@ -28,7 +28,6 @@ struct PIC_Controller {
 
 Bitu PIC_Ticks = 0;
 Bitu PIC_IRQCheck;
-Bitu PIC_IRQOnSecondPicActive;
 Bitu PIC_IRQActive;
 
 static IRQ_Block irqs[16];
@@ -36,7 +35,6 @@ static PIC_Controller pics[2];
 static bool PIC_Special_Mode = false;	//Saves one compare in the pic_run_irqloop
 struct PICEntry {
 	float index;
-	Bitu value;
 	PIC_EventHandler pic_event;
 	PICEntry * next;
 };
@@ -273,20 +271,21 @@ void PIC_ActivateIRQ(Bitu irq)
 		// cycles here.
 		// Required by Panic demo (irq0), It came from the desert (MPU401)
 		// Does it matter if CPU_CycleLeft becomes negative?
-		CPU_CycleLeft += (CPU_Cycles-2);
-		CPU_Cycles = 2;
+//		CPU_CycleLeft += (CPU_Cycles-2);
+//		CPU_Cycles = 2;
+		CPU_CycleLeft += CPU_Cycles;
+		CPU_Cycles = 0;
 		}
 	irqs[irq].active = true;
-	if( irq < 8 )
+	if (irq < 8)
 		{
 		if (!irqs[irq].masked)
-			PIC_IRQCheck|=(1 << irq);
+			PIC_IRQCheck |= (1<<irq);
 		}
 	else
 		{
-		PIC_IRQOnSecondPicActive |= (1 << irq);
 		if (!irqs[irq].masked && !irqs[2].masked)
-			PIC_IRQCheck |= (1 << irq);
+			PIC_IRQCheck |= (1< irq);
 		}
 	}
 
@@ -294,7 +293,6 @@ void PIC_DeActivateIRQ(Bitu irq)
 	{
 	irqs[irq].active = false;
 	PIC_IRQCheck &= ~(1 << irq);
-	PIC_IRQOnSecondPicActive &= ~(1 << irq);
 	}
 
 bool PIC_startIRQ(Bitu i)
@@ -304,7 +302,6 @@ bool PIC_startIRQ(Bitu i)
 		return false;
 	irqs[i].active = false;
 	PIC_IRQCheck &= ~(1 << i);
-	PIC_IRQOnSecondPicActive &= ~(1 << i);
 	CPU_HW_Interrupt(irqs[i].vector);
 	Bitu pic = (i&8)>>3;
 	if (!pics[pic].auto_eoi)
@@ -434,14 +431,13 @@ static void AddEntry(PICEntry * entry)
 static bool InEventService = false;
 static float srv_lag = 0;
 
-void PIC_AddEvent(PIC_EventHandler handler, float delay, Bitu val)
+void PIC_AddEvent(PIC_EventHandler handler, float delay)
 	{
 	if (!pic_queue.free_entry)
 		return;
 	PICEntry * entry = pic_queue.free_entry;
 	entry->index = delay + (InEventService ? srv_lag : PIC_TickIndex());
 	entry->pic_event = handler;
-	entry->value = val;
 	pic_queue.free_entry = pic_queue.free_entry->next;
 	AddEntry(entry);
 	}
@@ -484,14 +480,14 @@ bool PIC_RunQueue(void)
 	if (CPU_CycleLeft <= 0)
 		return false;
 	// Check the queue for an entry
-	Bits index_nd = CPU_CycleMax-CPU_CycleLeft-CPU_Cycles;
+	Bits index_nd = CPU_CycleMax-CPU_CycleLeft;
 	InEventService = true;
 	while (pic_queue.next_entry && (pic_queue.next_entry->index*CPU_CycleMax <= index_nd))
 		{
 		PICEntry * entry = pic_queue.next_entry;
 		pic_queue.next_entry = entry->next;
 		srv_lag = entry->index;
-		(entry->pic_event)(entry->value);		// call the event handler
+		(entry->pic_event)();		// call the event handler
 		// Put the entry in the free list
 		entry->next = pic_queue.free_entry;
 		pic_queue.free_entry = entry;
@@ -569,14 +565,14 @@ void PIC_Init()
 	irqs[1].masked = false;					// Enable Keyboard IRQ
 	irqs[2].masked = false;					// Enable second pic
 	irqs[8].masked = false;					// Enable RTC IRQ
-	ReadHandler[0].Install(0x20, read_command, IO_MB);
-	ReadHandler[1].Install(0x21, read_data, IO_MB);
-	WriteHandler[0].Install(0x20, write_command, IO_MB);
-	WriteHandler[1].Install(0x21, write_data, IO_MB);
-	ReadHandler[2].Install(0xa0, read_command, IO_MB);
-	ReadHandler[3].Install(0xa1, read_data, IO_MB);
-	WriteHandler[2].Install(0xa0, write_command, IO_MB);
-	WriteHandler[3].Install(0xa1, write_data, IO_MB);
+	ReadHandler[0].Install(0x20, read_command);
+	ReadHandler[1].Install(0x21, read_data);
+	WriteHandler[0].Install(0x20, write_command);
+	WriteHandler[1].Install(0x21, write_data);
+	ReadHandler[2].Install(0xa0, read_command);
+	ReadHandler[3].Install(0xa1, read_data);
+	WriteHandler[2].Install(0xa0, write_command);
+	WriteHandler[3].Install(0xa1, write_data);
 	// Initialize the pic queue
 	for (Bitu i = 0; i < PIC_QUEUESIZE-1; i++)
 		pic_queue.entries[i].next = &pic_queue.entries[i+1];

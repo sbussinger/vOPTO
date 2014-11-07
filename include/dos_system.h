@@ -108,16 +108,14 @@ public:
 	virtual bool Rename(char * oldname, char * newname) = 0;
 	virtual bool AllocationInfo(Bit16u * _bytes_sector, Bit8u * _sectors_cluster, Bit16u * _total_clusters, Bit16u * _free_clusters) = 0;
 	virtual bool FileExists(const char* name) = 0;
-	virtual Bit8u GetMediaByte(void) = 0;
 
-	void		SetLabel(const char* name);
 	char*		GetLabel(void) { return label; };
 	Bit32u		VolSerial;
 	char *		GetInfo(void);
 	char		curdir[DOS_PATHLENGTH];
 	char		info[256];
-private:
 	char		label[14];
+	bool		remote;
 	};
 
 enum {OPEN_READ = 0, OPEN_WRITE = 1, OPEN_READWRITE = 2, DOS_NOT_INHERIT = 128};

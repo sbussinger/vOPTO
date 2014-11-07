@@ -74,9 +74,6 @@
     <ClCompile Include="..\src\cpu\paging.cpp">
       <Filter>Source Files\cpu</Filter>
     </ClCompile>
-    <ClCompile Include="..\src\hardware\cmos.cpp">
-      <Filter>Source Files\hardware</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\hardware\iohandler.cpp">
       <Filter>Source Files\hardware</Filter>
     </ClCompile>
@@ -132,9 +129,6 @@
       <Filter>Source Files\gui</Filter>
     </ClCompile>
     <ClCompile Include="..\src\ints\bios.cpp">
-      <Filter>Source Files\ints</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ints\bios_disk.cpp">
       <Filter>Source Files\ints</Filter>
     </ClCompile>
     <ClCompile Include="..\src\ints\bios_keyboard.cpp">

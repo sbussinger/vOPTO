@@ -9,11 +9,7 @@
 #include "pic.h"
 #include "paging.h"
 
-#define SaveMb(off, val)	vPC_rStosb(off, val)
-#define SaveMw(off, val)	vPC_rStosw(off, val)
-#define SaveMd(off, val)	vPC_rStosd(off, val)
-
-#define CPU_PIC_CHECK 1
+#define CPU_PIC_CHECK 0
 #define CPU_TRAP_CHECK 1
 
 #define OPCODE_NONE			0x000
@@ -65,31 +61,50 @@ static struct {
 #define BaseDS		core.base_ds
 #define BaseSS		core.base_ss
 
-static inline Bit8u Fetchb()
+static Bit32u fetchAddr = -1;														// Caching/prefetching gives a slight performance improvement
+union {
+	Bit32u dword;
+	Bit16u word[2];
+	Bit8u byte[4];
+} fetchCache;
+
+__forceinline static Bit8u Fetchb()
 	{
-	Bit8u temp = vPC_rLodsb(core.cseip);
+	Bitu cOffset = core.cseip-fetchAddr;
+	if (cOffset > 3)
+		{
+		fetchAddr = core.cseip&~3;
+		fetchCache.dword = Mem_Lodsd(fetchAddr);
+		cOffset = core.cseip-fetchAddr;
+		}
 	core.cseip += 1;
-	return temp;
+	return fetchCache.byte[cOffset];	
 	}
 
-static inline Bit16u Fetchw()
+__forceinline static Bit16u Fetchw()
 	{
-	Bit16u temp = vPC_rLodsw(core.cseip);
+	Bitu cOffset = core.cseip&3;
+	if (cOffset < 3)
+		{
+		if (core.cseip-fetchAddr > 3)
+			{
+			fetchAddr = core.cseip-cOffset;
+			fetchCache.dword = Mem_Lodsd(fetchAddr);
+			}
+		core.cseip += 2;
+		return *(Bit16u*)(&fetchCache.byte[cOffset]);	
+		}
+	Bit16u temp = Mem_Lodsw(core.cseip);
 	core.cseip += 2;
 	return temp;
 	}
 
-static inline Bit32u Fetchd()
+__forceinline static Bit32u Fetchd()
 	{
-	Bit32u temp = vPC_rLodsd(core.cseip);
+	Bit32u temp = Mem_Lodsd(core.cseip);
 	core.cseip += 4;
 	return temp;
 	}
-
-#define Push_16 CPU_Push16
-#define Push_32 CPU_Push32
-#define Pop_16 CPU_Pop16
-#define Pop_32 CPU_Pop32
 
 #include "instructions.h"
 #include "core_normal/support.h"
@@ -110,6 +125,8 @@ Bits CPU_Core_Normal_Run(void)
 		BaseSS = SegBase(ss);
 		core.base_val_ds = ds;
 restart_opcode:
+//lastOpcode = core.opcode_index+Fetchb();
+//		switch (lastOpcode)
 		switch (core.opcode_index+Fetchb())
 			{
 		#include "core_normal/prefix_none.h"

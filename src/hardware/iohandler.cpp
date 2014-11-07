@@ -40,28 +40,14 @@ void IO_WriteDefault(Bitu port, Bitu val, Bitu iolen)
 		}
 	}
 
-void IO_RegisterReadHandler(Bitu port, IO_ReadHandler * handler, Bitu mask, Bitu range)
+void IO_RegisterReadHandler(Bitu port, IO_ReadHandler * handler)
 	{
-	while (range--)
-		{
-		if (mask&IO_MB)
-			io_readhandlers[0][port] = handler;
-		if (mask&IO_MW)
-			io_readhandlers[1][port] = handler;
-		port++;
-		}
+	io_readhandlers[0][port] = handler;
 	}
 
-void IO_RegisterWriteHandler(Bitu port, IO_WriteHandler * handler, Bitu mask, Bitu range)
+void IO_RegisterWriteHandler(Bitu port, IO_WriteHandler * handler)
 	{
-	while (range--)
-		{
-		if (mask&IO_MB)
-			io_writehandlers[0][port] = handler;
-		if (mask&IO_MW)
-			io_writehandlers[1][port] = handler;
-		port++;
-		}
+	io_writehandlers[0][port] = handler;
 	}
 
 void IO_FreeReadHandler(Bitu port, Bitu mask, Bitu range)
@@ -88,44 +74,16 @@ void IO_FreeWriteHandler(Bitu port, Bitu mask, Bitu range)
 		}
 	}
 
-void IO_ReadHandleObject::Install(Bitu port, IO_ReadHandler * handler, Bitu mask, Bitu range)
+void IO_ReadHandleObject::Install(Bitu port, IO_ReadHandler * handler)
 	{
-	if (!installed)
-		{
-		installed = true;
-		m_port = port;
-		m_mask = mask;
-		m_range = range;
-		IO_RegisterReadHandler(port, handler, mask, range);
-		}
-	else
-		E_Exit("IO_readHandler allready installed port %x", port);
+	m_port = port;
+	IO_RegisterReadHandler(port, handler);
 	}
 
-IO_ReadHandleObject::~IO_ReadHandleObject()
+void IO_WriteHandleObject::Install(Bitu port, IO_WriteHandler * handler)
 	{
-	if (installed)
-		IO_FreeReadHandler(m_port, m_mask, m_range);
-	}
-
-void IO_WriteHandleObject::Install(Bitu port, IO_WriteHandler * handler, Bitu mask, Bitu range)
-	{
-	if (!installed)
-		{
-		installed = true;
-		m_port = port;
-		m_mask = mask;
-		m_range = range;
-		IO_RegisterWriteHandler(port, handler, mask, range);
-		}
-	else
-		E_Exit("IO_writeHandler allready installed port %x", port);
-	}
-
-IO_WriteHandleObject::~IO_WriteHandleObject()
-	{
-	if (installed)
-		IO_FreeWriteHandler(m_port, m_mask, m_range);
+	m_port = port;
+	IO_RegisterWriteHandler(port, handler);
 	}
 
 void IO_WriteB(Bitu port, Bitu val)

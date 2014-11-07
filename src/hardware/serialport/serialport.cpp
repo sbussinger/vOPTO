@@ -31,8 +31,8 @@ CSerial::CSerial(Bitu portno, device_PRT* dosdevice)
 	
 	for (Bitu i = 0; i <= 7; i++)
 		{
-		WriteHandler[i].Install (i + base, SERIAL_Write, IO_MB);
-		ReadHandler[i].Install (i + base, SERIAL_Read, IO_MB);
+		WriteHandler[i].Install (i + base, SERIAL_Write);
+		ReadHandler[i].Install (i + base, SERIAL_Read);
 		}
 	mydosdevice = dosdevice;
 	}

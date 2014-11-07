@@ -93,6 +93,7 @@ void MSG_Init()
 	MSG_Add("FILE_NOT_FOUND",		"File not found\n");
 	MSG_Add("ILLEGAL_COMMAND",		"Bad command or file name\n");
 	MSG_Add("ILLEGAL_PATH",			"Path not found\n");
+	MSG_Add("INVALID_CP",			"Invalid code page number: %d\n");
 	MSG_Add("INVALID_DIRECTORY",	"Invalid directory\n");
 	MSG_Add("INVALID_DRIVE",		"Invalid drive specification\n");
 	MSG_Add("INVALID_PARAMETER",	"Invalid parameter - %s\n");
@@ -108,6 +109,10 @@ void MSG_Init()
 									"  USE c: c:\\dos program\n\n"
 									"Assigns DOS drive C: to the Windows directory c:\\dos program\n");
 	MSG_Add("CALL?",				"Call a batch program from another\n");
+	MSG_Add("CHCP?",				"Displays or sets the active code page number.\n\n"
+									"CHCP [nnn]\n\n"
+									"  nnn   Specifies a code page number.\n\n"
+									"Type CHCP without a parameter to display the active code page number.\n");
 	MSG_Add("CHDIR?",				"Displays the name of or changes the current directory.\n\n"
 									"CHDIR [drive:][path]\n"
 									"CHDIR [..]\n"
@@ -149,7 +154,7 @@ void MSG_Init()
 									"  variable  Specifies the environment-variable name.\n"
 									"  string    Specifies a series of characters to assign to the variable.\n\n"
 									"Type SET without parameters to display the current environment variables.\n");
-	MSG_Add("SHIFT?",				"Leftshift commandline parameters in a batch script\n");
+	MSG_Add("SHIFT?",				"Left shift commandline parameters in a batch script\n");
 	MSG_Add("TIME?",				"Display the time\n");
 	MSG_Add("TYPE?",				"Displays the contents of a text file.\n\n"
 									"TYPE [drive:][path]filename\n");
@@ -162,11 +167,13 @@ void MSG_Init()
 	MSG_Add("MEM:EMS",					"%5dK EMS\n");
 	MSG_Add("MEM:UPPER1",				"%5dK Upper\n");
 	MSG_Add("MEM:UPPER2",				"%5dK Upper in %d blocks, largest: %dK\n");
-	MSG_Add("USE:MOUNTED",				"\n      Windows directory\n");
+	MSG_Add("USE:MOUNTED",				"\n      Windows path\n");
 	MSG_Add("USE:NODIR",				"Directory %s doesn't exist\n");
-	MSG_Add("USE:ALREADY_USED",			"%c: is already used\n");
+	MSG_Add("USE:ALREADY_USED",			"%c: is already assigned\n");
 	MSG_Add("USE:ERROR",				"Could not set %c: to %s\n");
 
+	MSG_Add("CHCP:CURRENT",				"Active code page: %d\n");
+	MSG_Add("CHCP:MISSING",				"Characters not defined in active TTF font: %d.\nYou could try another font (see config.txt).\n");
 	MSG_Add("COPY:FAILURE",				"Copy failure : %s\n");
 	MSG_Add("COPY:SUCCESS",				"   %d file(s) copied\n");
 	MSG_Add("COPY:SAMEFILE",			"File cannot be copied onto itself\n");
@@ -202,5 +209,5 @@ const char * MSG_Get(char const * msg)
 	for(itmb tel = Lang.begin(); tel != Lang.end(); tel++)
 		if ((*tel).name == msg)
 			return  (*tel).val.c_str();
-	return "Message not Found!\n";
+	return "Message not found!\n";
 	}

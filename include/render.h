@@ -27,19 +27,17 @@ typedef struct {
 		bool nextInvalid;
 		Bit8u *pointer;
 		Bitu width, height;
-		int start_x, past_x, start_y, past_y, curr_y;
+		int start_y, past_y, curr_y;
 	} cache;
 	RenderPal_t pal;
-	bool updating;
 	bool active;
 } Render_t;
 
 typedef struct {
-	bool	inUse;
 	char	fontName[32];
 	HFONT	hFontNormal;
 	TTF_Font *SDL_font;
-	bool	vDos;								// is vDos.ttf loaded, pointsizes should be even to look really nice
+	bool	vDos;								// is vDos.ttf loaded, pointsizes are preferred to be even to look really nice
 	int		pointsize;
 	int		height;								// height of character cell
 	int		width;								// width
@@ -55,16 +53,13 @@ extern Render_t render;
 extern Render_ttf ttf;
 extern ScalerLineHandler_t RENDER_DrawLine;
 extern Bit16u curAttrChar[];					// currently displayed textpage
-//extern Bit16u newAttrChar[];					// to be replaced by
 extern Bit16u * newAttrChar;					// to be replaced by
 
 void RENDER_SetSize(Bitu width,Bitu height);
 bool RENDER_StartUpdate(void);
 void RENDER_EndUpdate(void);
-void RENDER_Halt(void);
-void RENDER_Reset(void);
+void RENDER_ForceUpdate(void);
 
-extern bool colorsLocked;
 inline void RENDER_SetPal(Bit8u entry, Bit8u red, Bit8u green, Bit8u blue)
 	{
 	render.pal.rgb[entry].red = red;

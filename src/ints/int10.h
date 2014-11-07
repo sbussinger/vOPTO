@@ -64,8 +64,8 @@
 #define VGAREG_CGA_MODECTL             0x3d8
 #define VGAREG_CGA_PALETTE             0x3d9
 
-#define BIOS_NCOLS Bit16u ncols = vPC_rLodsw(BIOSMEM_SEG, BIOSMEM_NB_COLS);
-#define BIOS_NROWS Bit16u nrows = (Bit16u)vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_NB_ROWS)+1;
+#define BIOS_NCOLS Bit16u ncols = Mem_Lodsw(BIOSMEM_SEG, BIOSMEM_NB_COLS);
+#define BIOS_NROWS Bit16u nrows = (Bit16u)Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_NB_ROWS)+1;
 
 extern Bit8u int10_font_08[256 * 8];
 extern Bit8u int10_font_14[256 * 14];
@@ -109,15 +109,15 @@ extern Int10Data int10;
 
 static Bit8u CURSOR_POS_COL(Bit8u page)
 	{
-	return vPC_rLodsb(BIOSMEM_SEG, BIOSMEM_CURSOR_POS+page*2);
+	return Mem_Lodsb(BIOSMEM_SEG, BIOSMEM_CURSOR_POS+page*2);
 	}
 
 static Bit8u CURSOR_POS_ROW(Bit8u page)
 	{
-	return vPC_rLodsb(BIOSMEM_SEG,BIOSMEM_CURSOR_POS+page*2+1);
+	return Mem_Lodsb(BIOSMEM_SEG,BIOSMEM_CURSOR_POS+page*2+1);
 	}
 
-bool INT10_SetVideoMode(Bit16u mode);
+bool INT10_SetVideoMode(Bit8u mode);
 
 void INT10_ScrollWindow(Bit8u rul,Bit8u cul,Bit8u rlr,Bit8u clr,Bit8s nlines,Bit8u attr,Bit8u page);
 
