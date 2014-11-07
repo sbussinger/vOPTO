@@ -7,10 +7,10 @@ This fork is specifically tailored for use with the OPTO Optometric Practice Man
 
 The original vDos project can be found at [http://sourceforge.net/projects/vdos/](http://sourceforge.net/projects/vdos/). vDos was derived from the DOSBox project found at [http://sourceforge.net/projects/dosbox/](http://sourceforge.net/projects/dosbox/). The license for this fork is GPLv2 to match the original DOSBox project as well as the vDos project.
 
-## Features
+### Features
 This fork tracks the master source code of the vDos project and adds several features necessary to support the OPTO program.
 
-### mailslots
+#### mailslots
 This branch adds the DOS Mailslot API's to vDos.
 
-## Project Notes
+### Project Notes
