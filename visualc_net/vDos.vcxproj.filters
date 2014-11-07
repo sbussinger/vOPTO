@@ -233,6 +233,9 @@
     <ClCompile Include="..\src\vdos.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\ints\ems.cpp">
+      <Filter>Source Files\ints</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\src\winres.rc">
@@ -297,9 +300,6 @@
     <ClInclude Include="..\include\callback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\control.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\cpu.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -340,9 +340,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\include\serialport.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\setup.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\include\shell.h">
