@@ -98,6 +98,7 @@ void vDOS_Init(void)
 	secprop->Add_string("font", "");
 	secprop->Add_int("hide", 5);
 	secprop->Add_int("wp");
+	secprop->Add_string("bootdrive", "Z");
 	secprop->AddInitFunction(&IO_Init);
 	secprop->AddInitFunction(&PAGING_Init);
 	secprop->AddInitFunction(&MEM_Init);

@@ -4,6 +4,7 @@
 #include <ctype.h>
 
 #include "vDos.h"
+#include "control.h"
 #include "bios.h"
 #include "mem.h"
 #include "regs.h"
@@ -1338,5 +1339,5 @@ void DOS_SetupFiles(void)
 	// Setup the Virtual Disk System
 	for (Bit32u i = 0; i < DOS_DRIVES-1; i++)
 		Drives[i] = 0;
-	Drives[DOS_DRIVES-1] = new Virtual_Drive();
-	}
+	const char * bootdrive = static_cast<Section_prop *>(control->GetSection())->Get_string("bootdrive");
+	Drives[(bootdrive[0] & 0x1F) - 1] = new Virtual_Drive();
